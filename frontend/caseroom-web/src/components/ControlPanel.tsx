@@ -1,4 +1,4 @@
-import type { MapRoom } from "../types";
+import type { MapRoom, SessionSnapshot } from "../types";
 
 type ControlPanelProps = {
   gameStatus: string;
@@ -12,6 +12,11 @@ type ControlPanelProps = {
   onInteractObject: (objectId: string) => void;
   onStartPushToTalk: () => void;
   onStopPushToTalk: () => void;
+  isHost: boolean;
+  canExplore: boolean;
+  snapshot: SessionSnapshot;
+  onStartBriefing: () => void;
+  onStartExploration: () => void;
 };
 
 /**
@@ -29,13 +34,36 @@ export function ControlPanel({
   onMoveToRoom,
   onInteractObject,
   onStartPushToTalk,
-  onStopPushToTalk
+  onStopPushToTalk,
+  isHost,
+  canExplore,
+  snapshot,
+  onStartBriefing,
+  onStartExploration
 }: ControlPanelProps) {
   return (
     <aside className="side-panel">
       <h2>CaseRoom</h2>
       <p className="small">{gameStatus}</p>
       <p className="small">{voiceStatus}</p>
+
+      <p className="phase-indicator"><strong>Phase:</strong> {snapshot.phase}</p>
+
+
+
+      {isHost && snapshot.phase === "Briefing" && (
+        <button onClick={onStartExploration} className="primary-action">
+          Start Exploration
+        </button>
+      )}
+
+      {snapshot.phase === "Briefing" && (
+        <div className="briefing-panel">
+          <h3>Briefing</h3>
+          <p>{snapshot.briefingText}</p>
+        </div>
+      )}
+
       {isMoving && (
         <div className="movement-status">
           Moving{targetRoom ? ` to ${targetRoom.name}` : ""}...
@@ -64,14 +92,14 @@ export function ControlPanel({
       <div className="button-list">
         {currentRoom.connectedRoomIds.map(roomId => {
           const room = rooms.find(r => r.id === roomId);
-          return <button key={roomId} disabled={isMoving} onClick={() => onMoveToRoom(roomId)}>{room?.name ?? roomId}</button>;
+          return <button key={roomId} disabled={isMoving || !canExplore} onClick={() => onMoveToRoom(roomId)}>{room?.name ?? roomId}</button>;
         })}
       </div>
 
       <h3>Objects here</h3>
       <div className="button-list">
         {currentRoom.objects.map(obj => (
-          <button key={obj.id} disabled={isMoving} onClick={() => onInteractObject(obj.id)}>{obj.name}</button>
+          <button key={obj.id} disabled={isMoving || !canExplore} onClick={() => onInteractObject(obj.id)}>{obj.name}</button>
         ))}
       </div>
     </aside>

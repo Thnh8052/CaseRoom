@@ -8,6 +8,7 @@ import { useGameHub } from "./hooks/useGameHub";
 import { usePushToTalk } from "./hooks/usePushToTalk";
 import { useRoomTransition } from "./hooks/useRoomTransition";
 import { useVoiceHub } from "./hooks/useVoiceHub";
+import { LobbyScreen } from "./components/LobbyScreen";
 import "./styles.css";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:5050";
@@ -26,7 +27,7 @@ export default function App() {
 
   // Khởi tạo luồng kết nối WebRTC (Chỉ quản lý SDP/ICE, không quản lý trạng thái di chuyển)
   const voiceHub = useVoiceHub(API_BASE_URL);
-  
+
   // Khởi tạo luồng kết nối Game (Chịu trách nhiệm đồng bộ vị trí, phòng)
   // Khi GameHub đổi phòng thành công -> Báo cho VoiceHub đổi kênh Voice theo.
   const gameHub = useGameHub({
@@ -71,6 +72,21 @@ export default function App() {
     );
   }
 
+  if (gameHub.snapshot.phase === "Lobby") {
+    return (
+      <LobbyScreen
+        sessionId={sessionId}
+        players={gameHub.snapshot.players}
+        snapshot={gameHub.snapshot}
+        availableCases={gameHub.availableCases}
+        isHost={gameHub.isHost}
+        onSelectMode={gameHub.selectMode}
+        onSelectCase={gameHub.selectCase}
+        onStartBriefing={gameHub.startBriefing}
+      />
+    );
+  }
+
   return (
     <main className="shell">
       <ControlPanel
@@ -85,6 +101,12 @@ export default function App() {
         onInteractObject={gameHub.interactObject}
         onStartPushToTalk={pushToTalk.startPushToTalk}
         onStopPushToTalk={pushToTalk.stopPushToTalk}
+        isHost={gameHub.isHost}
+        canExplore={gameHub.canExplore}
+        snapshot={gameHub.snapshot}
+        onStartBriefing={gameHub.startBriefing}
+        onStartExploration={gameHub.startExploration}
+
       />
 
       <section className="map-panel">

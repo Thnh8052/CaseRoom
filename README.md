@@ -40,6 +40,10 @@ Version 1 goal:
 cd backend/CaseRoom.Api
 dotnet restore
 dotnet run
+
+cd c:\HUST\CaseRoom\backend\CaseRoom.Api
+dotnet run
+
 ```
 
 Backend default URL:
@@ -54,6 +58,10 @@ http://localhost:5050
 cd frontend/caseroom-web
 npm install
 npm run dev
+
+cd c:\HUST\CaseRoom\frontend\caseroom-web
+npm run dev
+
 ```
 
 Frontend default URL:

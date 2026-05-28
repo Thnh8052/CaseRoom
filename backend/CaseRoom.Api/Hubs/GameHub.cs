@@ -1,5 +1,7 @@
+using CaseRoom.Api.Models;
 using CaseRoom.Api.Services;
 using Microsoft.AspNetCore.SignalR;
+
 
 namespace CaseRoom.Api.Hubs;
 
@@ -32,6 +34,53 @@ public sealed class GameHub(GameStateStore store) : Hub
             player = player.ToDto(),
             snapshot = store.GetVisibleSnapshotForPlayer(normalizedSessionId, player.Id)
         };
+    }
+
+    /// <summary>
+    /// Lấy danh sách toàn bộ các vụ án đang có sẵn để Host có thể chọn.
+    /// </summary>
+    public IReadOnlyList<CaseSummaryDto> GetAvailableCases()
+    {
+        return store.GetAvailableCases();
+    }
+
+    public async Task SelectMode(string mode)
+    {
+        var conn = store.GetGameConnection(Context.ConnectionId);
+        if (conn == null) return;
+
+        if (!store.TrySelectMode(
+                conn.Value.SessionId,
+                conn.Value.PlayerId,
+                mode,
+                out var setupInfo,
+                out var error))
+        {
+            await Clients.Caller.SendAsync("GameError", error);
+            return;
+        }
+
+        await Clients.Group(HubGroupNames.GameGroup(conn.Value.SessionId))
+            .SendAsync("GameSetupChanged", setupInfo);
+    }
+
+    /// <summary>
+    /// Host chọn một vụ án. Nếu thành công, phát Broadcast cho cả phòng.
+    /// </summary>
+    public async Task SelectCase(string caseId)
+    {
+        var conn = store.GetGameConnection(Context.ConnectionId);
+        if (conn == null) return;
+
+        if (!store.TrySelectCase(conn.Value.SessionId, conn.Value.PlayerId, caseId, out var setupInfo, out var error))
+        {
+            await Clients.Caller.SendAsync("GameError", error);
+            return;
+        }
+
+        // Báo cho toàn bộ Session biết Case/Setup đã được thay đổi
+        await Clients.Group(HubGroupNames.GameGroup(conn.Value.SessionId))
+            .SendAsync("GameSetupChanged", setupInfo);
     }
 
     /// <summary>
@@ -95,6 +144,7 @@ public sealed class GameHub(GameStateStore store) : Hub
         var conn = store.GetGameConnection(Context.ConnectionId);
         if (conn == null) return;
         var normalizedSessionId = conn.Value.SessionId;
+
         if (!store.TryInteractObject(normalizedSessionId, conn.Value.PlayerId, objectId, out _, out var roomId, out var error))
         {
             await Clients.Caller.SendAsync("GameError", error);
@@ -117,6 +167,14 @@ public sealed class GameHub(GameStateStore store) : Hub
             
             // Báo cho những người trong phòng biết người này đã offline
             await BroadcastRoomOccupants(removed.Value.SessionId, removed.Value.RoomId);
+
+            // Nếu người thoát là Host, báo cho cả server cập nhật lại Host mới
+            if (removed.Value.HostChanged)
+            {
+                var phaseInfo = store.GetPhaseInfo(removed.Value.SessionId);
+                await Clients.Group(HubGroupNames.GameGroup(removed.Value.SessionId))
+                    .SendAsync("GamePhaseChanged", phaseInfo);
+            }
         }
 
         await base.OnDisconnectedAsync(exception);
@@ -133,5 +191,75 @@ public sealed class GameHub(GameStateStore store) : Hub
             roomId,
             players
         });
+    }
+
+    public async Task StartBriefing()
+{
+    var conn = store.GetGameConnection(Context.ConnectionId);
+    if (conn == null) return;
+
+    if (!store.TryStartBriefing(
+            conn.Value.SessionId,
+            conn.Value.PlayerId,
+            out var movedPlayers,
+            out var phaseInfo,
+            out var error))
+    {
+        await Clients.Caller.SendAsync("GameError", error);
+        return;
+    }
+
+    var affectedRooms = movedPlayers
+        .SelectMany(m => new[] { m.OldRoomId, m.NewRoomId })
+        .Distinct()
+        .ToList();
+
+    foreach (var move in movedPlayers)
+    {
+        if (move.OldRoomId != move.NewRoomId)
+        {
+            await Groups.RemoveFromGroupAsync(
+                move.ConnectionId,
+                HubGroupNames.RoomGroup(conn.Value.SessionId, move.OldRoomId)
+            );
+
+            await Groups.AddToGroupAsync(
+                move.ConnectionId,
+                HubGroupNames.RoomGroup(conn.Value.SessionId, move.NewRoomId)
+            );
+        }
+
+        await Clients.Client(move.ConnectionId).SendAsync(
+            "VoiceRoomShouldRefresh",
+            new { playerId = move.PlayerId }
+        );
+    }
+
+    await Clients.Group(HubGroupNames.GameGroup(conn.Value.SessionId))
+        .SendAsync("GamePhaseChanged", phaseInfo);
+
+    foreach (var roomId in affectedRooms)
+    {
+        await BroadcastRoomOccupants(conn.Value.SessionId, roomId);
+    }
+}
+
+    public async Task StartExploration()
+    {
+        var conn = store.GetGameConnection(Context.ConnectionId);
+        if (conn == null) return;
+
+        if (!store.TryStartExploration(
+                conn.Value.SessionId,
+                conn.Value.PlayerId,
+                out var phaseInfo,
+                out var error))
+        {
+            await Clients.Caller.SendAsync("GameError", error);
+            return;
+        }
+
+        await Clients.Group(HubGroupNames.GameGroup(conn.Value.SessionId))
+            .SendAsync("GamePhaseChanged", phaseInfo);
     }
 }

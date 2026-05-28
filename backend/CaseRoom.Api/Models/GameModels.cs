@@ -28,12 +28,56 @@ public sealed record PlayerDto(
     bool IsTalking
 );
 
+public enum GamePhase
+{
+    Lobby,
+    Briefing,
+    Exploration,
+    Discussion,
+    FinalVote,
+    Ended
+}
+
+public enum GameMode
+{
+    NpcMurderer,
+    PlayerMurderer,
+    EveryoneHasSecrets
+}
+
+/// <summary>
+/// DTO chứa thông tin tóm tắt của một vụ án (hiển thị ở màn hình Lobby).
+/// </summary>
+public sealed record CaseSummaryDto(
+    string Id,
+    string Title,
+    string Summary,
+    string Difficulty,
+    int EstimatedMinutes,
+    string BriefingText,
+    IReadOnlyList<string> SupportedModes
+);
+
+/// <summary>
+/// DTO chứa thông tin setup game, dùng để báo cho Client khi Host đổi Mode hoặc Case.
+/// </summary>
+public sealed record GameSetupInfo(
+    string SelectedMode,
+    CaseSummaryDto? SelectedCase,
+    string BriefingText
+);
+
 /// <summary>
 /// Chứa toàn bộ trạng thái mà Client được phép nhìn thấy tại một thời điểm.
 /// Đặc biệt quan trọng: Mảng Players chỉ chứa những người trong cùng một phòng (Fog of War).
 /// </summary>
 public sealed record SessionSnapshotDto(
     string SessionId,
+    string Phase,
+    string? HostPlayerId,
+    string SelectedMode,
+    CaseSummaryDto? SelectedCase,
+    string BriefingText,
     IReadOnlyList<MapRoomDto> Rooms,
     IReadOnlyList<PlayerDto> Players
 );
@@ -75,6 +119,24 @@ public sealed class GameSessionState
     // Danh sách người chơi trong Session.
     public Dictionary<string, PlayerState> Players { get; } = new();
 
+    public GamePhase Phase { get; set; } = GamePhase.Lobby;
+
+    public string? HostPlayerId { get; set; }
+
+    public GameMode SelectedMode { get; set; } = GameMode.NpcMurderer;
+
+    // Thông tin về vụ án hiện tại đang được chọn (Chỉ Host mới có quyền đổi ở Lobby).
+    public string SelectedCaseId { get; set; } = "blackwood_manor";
+
+    public string SelectedCaseTitle { get; set; } = "The Mystery of Blackwood Manor";
+
+    public CaseSummaryDto? SelectedCase { get; set; }
+
+    public string BriefingText { get; set; } =
+        "Welcome to Blackwood Manor. A murder happened last night. " +
+        "You are here to investigate. Listen carefully, search the rooms, " +
+        "question the witnesses, and find the truth.";
+    
     /// <summary>
     /// Sinh ra Snapshot dành riêng cho một người chơi.
     /// Nó sẽ tự động lọc ra những người khác nằm ngoài tầm nhìn (khác phòng).
@@ -92,12 +154,17 @@ public sealed class GameSessionState
     /// Sinh ra Snapshot dành cho những người đứng trong một căn phòng cụ thể.
     /// </summary>
     public SessionSnapshotDto ToSnapshotForRoom(string roomId) => new(
-        Id,
-        Rooms,
-        Players.Values
-            .Where(p => p.CurrentRoomId == roomId) // LUẬT BẢO MẬT KHÔNG GIAN (Fog of War)
-            .Select(p => p.ToDto())
-            .ToList()
+    Id,
+    Phase.ToString(),
+    HostPlayerId,
+    SelectedMode.ToString(),
+    SelectedCase,
+    BriefingText,
+    Rooms,
+    Players.Values
+        .Where(p => p.CurrentRoomId == roomId)
+        .Select(p => p.ToDto())
+        .ToList()
     );
 
     #region Topology (Bản đồ)

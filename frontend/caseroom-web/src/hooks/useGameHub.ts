@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useRef, useState } from "react";
 import * as signalR from "@microsoft/signalr";
-import type { Player, SessionSnapshot } from "../types";
+import type { CaseSummary, GamePhase, Player, SessionSnapshot, GameMode } from "../types";
 
 type JoinResult = {
   player: Player;
@@ -35,6 +35,7 @@ export function useGameHub({ apiBaseUrl, onSelfRoomChanged }: UseGameHubOptions)
   const sessionIdRef = useRef("");
   const selfRef = useRef<Player | null>(null);
   const snapshotRef = useRef<SessionSnapshot | null>(null);
+  const [availableCases, setAvailableCases] = useState<CaseSummary[]>([]);
 
   const setSelf = useCallback((player: Player | null) => {
     selfRef.current = player;
@@ -87,7 +88,40 @@ export function useGameHub({ apiBaseUrl, onSelfRoomChanged }: UseGameHubOptions)
         return next;
       });
     });
+    connection.on("GamePhaseChanged", (payload: {
+      phase: GamePhase;
+      hostPlayerId: string | null;
+      briefingText: string;
+    }) => {
+      setSnapshot(prev => {
+        if (!prev) return prev;
 
+        const next = {
+          ...prev,
+          phase: payload.phase,
+          hostPlayerId: payload.hostPlayerId,
+          briefingText: payload.briefingText
+        };
+
+        snapshotRef.current = next;
+        return next;
+      });
+    });
+    connection.on("GameSetupChanged", (setupInfo: { selectedMode: GameMode; selectedCase: CaseSummary | null; briefingText: string; }) => {
+      setSnapshot(prev => {
+        if (!prev) return prev;
+
+        const next = {
+          ...prev,
+          selectedMode: setupInfo.selectedMode,
+          selectedCase: setupInfo.selectedCase,
+          briefingText: setupInfo.briefingText
+        };
+
+        snapshotRef.current = next;
+        return next;
+      });
+    });
     connection.on("VoiceRoomShouldRefresh", async (payload: { playerId: string }) => {
       if (payload.playerId === selfRef.current?.id) {
         await onSelfRoomChanged?.();
@@ -101,6 +135,8 @@ export function useGameHub({ apiBaseUrl, onSelfRoomChanged }: UseGameHubOptions)
     sessionIdRef.current = sessionId;
 
     const result = await connection.invoke<JoinResult>("JoinSession", sessionId, playerName);
+    const cases = await connection.invoke<CaseSummary[]>("GetAvailableCases");
+    setAvailableCases(cases);
     setSelf(result.player);
     setSnapshotAndRef(result.snapshot);
     setStatus(`Joined ${result.snapshot.sessionId} as ${result.player.name}`);
@@ -135,6 +171,40 @@ export function useGameHub({ apiBaseUrl, onSelfRoomChanged }: UseGameHubOptions)
     await connection.invoke("InteractObject", objectId);
   }, []);
 
+  const startBriefing = useCallback(async () => {
+    const connection = connectionRef.current;
+    if (!connection) return;
+
+    await connection.invoke("StartBriefing");
+  }, []);
+
+  const startExploration = useCallback(async () => {
+    const connection = connectionRef.current;
+    if (!connection) return;
+
+    await connection.invoke("StartExploration");
+  }, []);
+
+  const selectMode = useCallback(async (mode: GameMode) => {
+    const connection = connectionRef.current;
+    if (!connection) return;
+
+    await connection.invoke("SelectMode", mode);
+  }, []);
+
+  const selectCase = useCallback(async (caseId: string) => {
+    const connection = connectionRef.current;
+    if (!connection) return;
+
+    await connection.invoke("SelectCase", caseId);
+  }, []);
+
+  const isHost = useMemo(() => {
+    return !!self && snapshot?.hostPlayerId === self.id;
+  }, [self, snapshot]);
+
+  const canExplore = snapshot?.phase === "Exploration";
+
   const stop = useCallback(async () => {
     await connectionRef.current?.stop();
     connectionRef.current = null;
@@ -150,10 +220,17 @@ export function useGameHub({ apiBaseUrl, onSelfRoomChanged }: UseGameHubOptions)
     snapshot,
     currentRoom,
     visiblePlayers: snapshot?.players ?? [],
+    availableCases,
     status,
+    isHost,
+    canExplore,
     join,
     moveToRoom,
     interactObject,
+    selectMode,
+    selectCase,
+    startBriefing,
+    startExploration,
     stop
   };
 }
