@@ -14,17 +14,30 @@ export type MapRoom = {
   y: number;
   objects: MapObject[];
   connectedRoomIds: string[];
+  floorItems: Item[];
+};
+
+export type Item = {
+  id: string;
+  name: string;
+  description: string;
+  type: string;
+  x?: number;
+  y?: number;
 };
 
 export type Player = {
   id: string;
   name: string;
   currentRoomId: string;
-  currentObjectId: string | null;
-  isReady?: boolean;
-  isTalking?: boolean;
+  currentObjectId?: string;
+  x: number;
+  y: number;
+  isReady: boolean;
+  isTalking: boolean;
   role: string;
   appearance: CharacterAppearance;
+  inventory: Item[];
 };
 
 export type CharacterAppearance = {
@@ -60,6 +73,7 @@ export type Clue = {
 };
 
 export type GameMode =
+  | "SinglePlayer"
   | "NpcMurderer"
   | "PlayerMurderer"
   | "EveryoneHasSecrets";

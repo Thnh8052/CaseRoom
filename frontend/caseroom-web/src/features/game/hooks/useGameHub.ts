@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useRef, useState } from "react";
 import * as signalR from "@microsoft/signalr";
 import { useToast } from "../../../shared/ui/ToastProvider";
-import type { CaseSummary, Clue, GamePhase, Player, SessionSnapshot, GameMode, CharacterAppearance } from "../../../shared/types/game";
+import type { CaseSummary, Clue, GamePhase, Player, SessionSnapshot, GameMode, CharacterAppearance, Item } from "../../../shared/types/game";
 
 type JoinResult = {
   player: Player;
@@ -38,9 +38,10 @@ export function useGameHub({ apiBaseUrl, onSelfRoomChanged }: UseGameHubOptions)
   const selfRef = useRef<Player | null>(null);
   const snapshotRef = useRef<SessionSnapshot | null>(null);
   const [availableCases, setAvailableCases] = useState<CaseSummary[]>([]);
-  const [inspectionResult, setInspectionResult] = useState<{ objectId: string, result: string } | null>(null);
   const [inspectingPlayers, setInspectingPlayers] = useState<Record<string, string>>({});
+  const [inspectionResult, setInspectionResult] = useState<{ objectId: string, result: string } | null>(null);
   const [latestUnlockedClue, setLatestUnlockedClue] = useState<Clue | null>(null);
+  const [latestAcquiredItem, setLatestAcquiredItem] = useState<Item | null>(null);
 
   const setSelf = useCallback((player: Player | null) => {
     selfRef.current = player;
@@ -167,8 +168,26 @@ export function useGameHub({ apiBaseUrl, onSelfRoomChanged }: UseGameHubOptions)
       });
     });
 
+    connection.on("ItemAcquired", (item: Item) => {
+      setLatestAcquiredItem(item);
+    });
+
     connection.on("GameSnapshot", (newSnapshot: SessionSnapshot) => {
       setSnapshotAndRef(newSnapshot);
+    });
+
+    connection.on("PlayerMoved", (playerId: string, x: number, y: number) => {
+      setSnapshot(prev => {
+        if (!prev) return prev;
+        const pIndex = prev.players.findIndex(p => p.id === playerId);
+        if (pIndex === -1) return prev;
+        
+        const nextPlayers = [...prev.players];
+        nextPlayers[pIndex] = { ...nextPlayers[pIndex], x, y };
+        const next = { ...prev, players: nextPlayers };
+        snapshotRef.current = next;
+        return next;
+      });
     });
 
     connection.on("GameError", (message: string) => {
@@ -385,6 +404,32 @@ export function useGameHub({ apiBaseUrl, onSelfRoomChanged }: UseGameHubOptions)
     };
   }, []);
 
+  const dropItem = useCallback(async (itemId: string) => {
+    await connectionRef.current?.invoke("DropItem", itemId);
+  }, []);
+
+  const pickupFloorItem = useCallback(async (itemId: string) => {
+    await connectionRef.current?.invoke("PickupFloorItem", itemId);
+  }, []);
+
+  const giveItem = useCallback(async (targetPlayerId: string, itemId: string) => {
+    await connectionRef.current?.invoke("GiveItem", targetPlayerId, itemId);
+  }, []);
+
+  const shareClue = useCallback(async (targetPlayerId: string, clueId: string) => {
+    await connectionRef.current?.invoke("ShareClue", targetPlayerId, clueId);
+  }, []);
+
+  const updatePosition = useCallback(async (x: number, y: number) => {
+    const connection = connectionRef.current;
+    if (!connection) return;
+    try {
+      await connection.invoke("UpdatePosition", x, y);
+    } catch (e) {
+      console.warn("UpdatePosition failed", e);
+    }
+  }, []);
+
   const stop = useCallback(async () => {
     await connectionRef.current?.stop();
     connectionRef.current = null;
@@ -421,8 +466,16 @@ export function useGameHub({ apiBaseUrl, onSelfRoomChanged }: UseGameHubOptions)
     clearInspectionResult: useCallback(() => setInspectionResult(null), []),
     latestUnlockedClue,
     clearLatestUnlockedClue: useCallback(() => setLatestUnlockedClue(null), []),
+    latestAcquiredItem,
+    clearLatestAcquiredItem: useCallback(() => setLatestAcquiredItem(null), []),
     myClues: snapshot?.myClues || [],
     streamAskDetectiveAi,
-    tamperClue
+    tamperClue,
+    dropItem,
+    pickupFloorItem,
+    giveItem,
+    shareClue,
+    updatePosition,
+    stop
   };
 }

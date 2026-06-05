@@ -217,41 +217,49 @@ public sealed class GameHub(GameStateStore store, DeepSeekAiService aiService) :
         await BroadcastRoomOccupants(normalizedSessionId, roomId!);
     }
 
-    /// <summary>
-    /// Hoàn thành quá trình khám xét đồ vật (sau khi chạy xong Progress Bar).
-    /// </summary>
     public async Task CompleteInspection(string objectId)
     {
         var conn = store.GetGameConnection(Context.ConnectionId);
         if (conn == null) return;
         var normalizedSessionId = conn.Value.SessionId;
 
-        if (!store.TryCompleteInspection(normalizedSessionId, conn.Value.PlayerId, objectId, out var result, out var unlockedClue, out var error))
+        if (!store.TryCompleteInspection(normalizedSessionId, conn.Value.PlayerId, objectId, out var result, out var unlockedClue, out var acquiredItem, out var error))
         {
             await Clients.Caller.SendAsync("GameError", error);
             return;
         }
 
-    // Tạm thời chỉ gửi lại kết quả khám xét dạng Text cho người gọi
-    await Clients.Caller.SendAsync("ReceiveInspectionResult", new { objectId, result });
-    
-    // Nếu có clue mới, báo cho Client biết (kèm theo Snapshot mới để đồng bộ Sổ tay)
-    if (unlockedClue != null)
-    {
-        await Clients.Caller.SendAsync("ClueUnlocked", unlockedClue);
+        // Gửi thông báo text kết quả
+        await Clients.Caller.SendAsync("ReceiveInspectionResult", new { objectId, result });
         
-        var session = store.GetOrCreateSession(normalizedSessionId);
-        var snapshot = session.ToSnapshotForPlayer(conn.Value.PlayerId);
-        await Clients.Caller.SendAsync("GameSnapshot", snapshot);
-    }
+        var hasNewData = false;
+        
+        if (unlockedClue != null)
+        {
+            await Clients.Caller.SendAsync("ClueUnlocked", unlockedClue);
+            hasNewData = true;
+        }
+        
+        if (acquiredItem != null)
+        {
+            await Clients.Caller.SendAsync("ItemAcquired", acquiredItem);
+            hasNewData = true;
+        }
+        
+        if (hasNewData)
+        {
+            var session = store.GetOrCreateSession(normalizedSessionId);
+            var snapshot = session.ToSnapshotForPlayer(conn.Value.PlayerId);
+            await Clients.Caller.SendAsync("GameSnapshot", snapshot);
+        }
 
-    var player = store.GetCallerPlayer(Context.ConnectionId);
-    if (player?.CurrentRoomId != null)
-    {
-        await Clients.Group(HubGroupNames.RoomGroup(normalizedSessionId, player.CurrentRoomId))
-            .SendAsync("PlayerCancelledInspection", conn.Value.PlayerId);
+        var player = store.GetCallerPlayer(Context.ConnectionId);
+        if (player?.CurrentRoomId != null)
+        {
+            await Clients.Group(HubGroupNames.RoomGroup(normalizedSessionId, player.CurrentRoomId))
+                .SendAsync("PlayerCancelledInspection", conn.Value.PlayerId);
+        }
     }
-}
 
 public async Task TamperClue(string clueId, string fakeText)
 {
@@ -268,6 +276,74 @@ public async Task TamperClue(string clueId, string fakeText)
     var session = store.GetOrCreateSession(normalizedSessionId);
     var snapshot = session.ToSnapshotForPlayer(conn.Value.PlayerId);
     await Clients.Caller.SendAsync("GameSnapshot", snapshot);
+}
+
+public async Task DropItem(string itemId)
+{
+    var conn = store.GetGameConnection(Context.ConnectionId);
+    var player = store.GetCallerPlayer(Context.ConnectionId);
+    if (conn == null || player?.CurrentRoomId == null) return;
+
+    if (!store.TryDropItem(conn.Value.SessionId, conn.Value.PlayerId, itemId, out var error))
+    {
+        await Clients.Caller.SendAsync("GameError", error);
+        return;
+    }
+
+    await BroadcastRoomOccupants(conn.Value.SessionId, player.CurrentRoomId);
+}
+
+public async Task PickupFloorItem(string itemId)
+{
+    var conn = store.GetGameConnection(Context.ConnectionId);
+    var player = store.GetCallerPlayer(Context.ConnectionId);
+    if (conn == null || player?.CurrentRoomId == null) return;
+
+    if (!store.TryPickupFloorItem(conn.Value.SessionId, conn.Value.PlayerId, itemId, out var error))
+    {
+        await Clients.Caller.SendAsync("GameError", error);
+        return;
+    }
+
+    await BroadcastRoomOccupants(conn.Value.SessionId, player.CurrentRoomId);
+}
+
+public async Task GiveItem(string targetPlayerId, string itemId)
+{
+    var conn = store.GetGameConnection(Context.ConnectionId);
+    var player = store.GetCallerPlayer(Context.ConnectionId);
+    if (conn == null || player?.CurrentRoomId == null) return;
+
+    if (!store.TryGiveItem(conn.Value.SessionId, conn.Value.PlayerId, targetPlayerId, itemId, out var error))
+    {
+        await Clients.Caller.SendAsync("GameError", error);
+        return;
+    }
+
+    // Refresh for both sender and receiver (and everyone in room to see the items change if needed)
+    await BroadcastRoomOccupants(conn.Value.SessionId, player.CurrentRoomId);
+}
+
+public async Task ShareClue(string targetPlayerId, string clueId)
+{
+    var conn = store.GetGameConnection(Context.ConnectionId);
+    var player = store.GetCallerPlayer(Context.ConnectionId);
+    if (conn == null || player?.CurrentRoomId == null) return;
+
+    if (!store.TryShareClue(conn.Value.SessionId, conn.Value.PlayerId, targetPlayerId, clueId, out var error))
+    {
+        await Clients.Caller.SendAsync("GameError", error);
+        return;
+    }
+
+    // Gửi snapshot mới cho người nhận clue để họ thấy clue trong sổ
+    var session = store.GetOrCreateSession(conn.Value.SessionId);
+    var targetSnapshot = session.ToSnapshotForPlayer(targetPlayerId);
+    
+    // Cần tìm ConnectionId của targetPlayer để send
+    // (Ở đây, vì thiết kế hiện tại không lưu ngược PlayerId -> Game ConnectionId nên 
+    // tạm thời Broadcast toàn bộ những người trong phòng để họ lấy lại snapshot).
+    await BroadcastRoomOccupants(conn.Value.SessionId, player.CurrentRoomId);
 }
 
 public async Task StartInspection(string objectId)
@@ -404,5 +480,17 @@ public async Task CancelInspection()
             var snapshot = session.ToSnapshotForPlayer(p.Id);
             await Clients.Client(p.ConnectionId).SendAsync("GameSnapshot", snapshot);
         }
+    }
+    public async Task UpdatePosition(double x, double y)
+    {
+        var conn = store.GetGameConnection(Context.ConnectionId);
+        var player = store.GetCallerPlayer(Context.ConnectionId);
+        if (conn == null || player == null) return;
+
+        store.UpdatePlayerPosition(conn.Value.SessionId, player.Id, x, y);
+
+        // Broadcast tới mọi người trong phòng
+        await Clients.Group(HubGroupNames.RoomGroup(conn.Value.SessionId, player.CurrentRoomId))
+            .SendAsync("PlayerMoved", player.Id, x, y);
     }
 }

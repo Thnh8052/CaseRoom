@@ -1,6 +1,7 @@
 import type { GameMode } from "../../../shared/types/game";
 
 const modes: { id: GameMode; label: string; description: string }[] = [
+
   {
     id: "NpcMurderer",
     label: "NPC Murderer",

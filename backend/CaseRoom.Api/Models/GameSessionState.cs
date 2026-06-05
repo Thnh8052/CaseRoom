@@ -17,6 +17,12 @@ public sealed class GameSessionState
     // Danh sách manh mối còn lại cho mỗi Object trong phòng (ObjectId -> List of clues)
     public Dictionary<string, List<ClueDto>> AvailableClues { get; } = new();
 
+    // Danh sách vật phẩm có thể lấy từ mỗi Object trong phòng (ObjectId -> List of items)
+    public Dictionary<string, List<ItemDto>> AvailableItems { get; } = new();
+
+    // Danh sách vật phẩm bị rớt trên sàn của mỗi phòng (RoomId -> List of items)
+    public Dictionary<string, List<ItemDto>> FloorItems { get; } = new();
+
     public GamePhase Phase { get; set; } = GamePhase.Lobby;
 
     public string? HostPlayerId { get; set; }
@@ -57,6 +63,12 @@ public sealed class GameSessionState
             ? targetPlayer.UnlockedClues
             : new List<ClueDto>();
 
+        var mappedRooms = Rooms.Select(r => 
+            FloorItems.TryGetValue(r.Id, out var items) 
+                ? r with { FloorItems = items } 
+                : r with { FloorItems = new List<ItemDto>() }
+        ).ToList();
+
         return new(
             Id,
             Phase.ToString(),
@@ -64,7 +76,7 @@ public sealed class GameSessionState
             SelectedMode.ToString(),
             SelectedCase,
             BriefingText,
-            Rooms,
+            mappedRooms,
             Players.Values
                 .Where(p => p.CurrentRoomId == roomId)
                 .Select(p => p.ToDto(targetPlayerId ?? ""))

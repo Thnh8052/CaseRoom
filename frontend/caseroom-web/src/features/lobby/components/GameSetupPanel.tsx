@@ -25,12 +25,25 @@ export function GameSetupPanel({
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
-      <ModeSelector
-        selectedMode={selectedMode}
-        isHost={isHost}
-        canEdit={canEdit}
-        onSelectMode={onSelectMode}
-      />
+      {selectedMode === "SinglePlayer" ? (
+        <div className="glass-panel">
+          <h2 className="lobby-header">Game Mode</h2>
+          <p className="lobby-subtitle">Single Player mode active.</p>
+          <div className="setup-grid">
+            <div className="setup-item selected" style={{ cursor: "default" }}>
+              <div className="setup-item-title">NPC Murderer</div>
+              <div className="setup-item-desc">Investigate and identify the NPC murderer.</div>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <ModeSelector
+          selectedMode={selectedMode}
+          isHost={isHost}
+          canEdit={canEdit}
+          onSelectMode={onSelectMode}
+        />
+      )}
 
       <CollapsibleCaseList
         cases={cases}

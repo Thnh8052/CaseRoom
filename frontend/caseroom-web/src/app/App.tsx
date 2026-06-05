@@ -2,6 +2,7 @@ import { useCallback, useState, useEffect } from "react";
 import { ControlPanel } from "../features/game/components/ControlPanel";
 import { CurrentRoomView } from "../features/game/components/CurrentRoomView";
 import { VisiblePlayersPanel } from "../features/game/components/VisiblePlayersPanel";
+import { InventoryPanel } from "../features/game/components/InventoryPanel";
 import { RoomTransitionOverlay } from "../features/game/components/RoomTransitionOverlay";
 import { ReconnectingOverlay } from "../features/game/components/ReconnectingOverlay";
 import { JoinScreen } from "../features/lobby/components/JoinScreen";
@@ -71,14 +72,34 @@ export default function App() {
     }
   }, [gameHub.latestUnlockedClue, addToast, gameHub.clearLatestUnlockedClue]);
 
-  const joinAndStartVoice = useCallback(async () => {
+  useEffect(() => {
+    if (gameHub.latestAcquiredItem) {
+      addToast({
+        title: "Nhặt được vật phẩm!",
+        description: gameHub.latestAcquiredItem.name,
+        type: 'info'
+      });
+      gameHub.clearLatestAcquiredItem();
+    }
+  }, [gameHub.latestAcquiredItem, addToast, gameHub.clearLatestAcquiredItem]);
+
+  const joinAndStartVoice = useCallback(async (mode?: string, explicitSessionId?: string) => {
     try {
-      const result = await gameHub.join(sessionId, playerName);
-      await voiceHub.start(sessionId, result.player.id);
+      const targetSessionId = explicitSessionId || sessionId;
+      const result = await gameHub.join(targetSessionId, playerName);
+      if (mode === "SinglePlayer") {
+        await gameHub.selectMode("SinglePlayer");
+      }
+      await voiceHub.start(targetSessionId, result.player.id);
     } catch (error) {
       alert(error instanceof Error ? error.message : "Could not join session.");
     }
   }, [gameHub, playerName, sessionId, voiceHub]);
+
+  const leaveSession = useCallback(async () => {
+    await voiceHub.stop();
+    await gameHub.stop();
+  }, [voiceHub, gameHub]);
 
   if (!gameHub.self || !gameHub.snapshot || !gameHub.currentRoom) {
     return (
@@ -106,6 +127,7 @@ export default function App() {
         onStartBriefing={gameHub.startBriefing}
         onToggleReady={gameHub.toggleReady}
         onSetAppearance={gameHub.setAppearance}
+        onLeave={leaveSession}
       />
     );
   }
@@ -145,6 +167,8 @@ export default function App() {
           onStartInspection={gameHub.startInspection}
           onCancelInspection={gameHub.cancelInspection}
           onCompleteInspection={gameHub.completeInspection}
+          onPickupFloorItem={gameHub.pickupFloorItem}
+          onUpdatePosition={gameHub.updatePosition}
         />
         <RoomTransitionOverlay
           isMoving={roomTransition.isMoving}
@@ -152,11 +176,23 @@ export default function App() {
         />
       </section>
 
-      <VisiblePlayersPanel
-        currentRoom={gameHub.currentRoom}
-        players={gameHub.visiblePlayers}
-        talkingIds={voiceHub.talkingIds}
-      />
+      <div>
+        <VisiblePlayersPanel
+          currentRoom={gameHub.currentRoom}
+          players={gameHub.visiblePlayers}
+          talkingIds={voiceHub.talkingIds}
+          inspectingPlayers={gameHub.inspectingPlayers}
+        />
+
+        {gameHub.latestSelf && (
+          <InventoryPanel
+            inventory={gameHub.latestSelf.inventory ?? []}
+            onDropItem={gameHub.dropItem}
+            onGiveItem={gameHub.giveItem}
+            visiblePlayers={gameHub.visiblePlayers.filter(p => p.id !== gameHub.latestSelf?.id)}
+          />
+        )}
+      </div>
 
       {/* Result Modal */}
       {gameHub.inspectionResult && (
@@ -188,6 +224,8 @@ export default function App() {
           onClose={() => setIsNotebookOpen(false)}
           streamAskDetectiveAi={gameHub.streamAskDetectiveAi}
           tamperClue={gameHub.tamperClue}
+          visiblePlayers={gameHub.visiblePlayers.filter(p => p.id !== gameHub.latestSelf?.id)}
+          shareClue={gameHub.shareClue}
         />
       )}
 

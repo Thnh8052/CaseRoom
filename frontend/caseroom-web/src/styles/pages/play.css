@@ -224,10 +224,12 @@
 }
 
 .inspect-progress-text {
-  font-size: 0.75rem;
+  font-size: 0.65rem;
   color: #38bdf8;
   font-weight: bold;
-  white-space: nowrap;
+  white-space: normal;
+  text-align: center;
+  line-height: 1.2;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
 }
 
@@ -254,26 +256,28 @@
 /* Bubble for other players inspecting */
 .inspect-bubble {
   position: absolute;
-  top: -46px;
+  top: -55px;
   left: 50%;
   transform: translateX(-50%);
   background: rgba(15, 23, 42, 0.95);
   color: #fff;
-  padding: 6px 12px;
-  border-radius: 20px;
-  font-size: 13px;
+  padding: 6px 10px;
+  border-radius: 12px;
+  font-size: 11px;
   font-weight: bold;
-  white-space: nowrap;
+  white-space: normal;
+  text-align: center;
   pointer-events: none;
   box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
   border: 1px solid #38bdf8;
   display: flex;
+  flex-direction: row;
   align-items: center;
+  justify-content: center;
   gap: 6px;
   animation: pulseInspect 2s infinite;
-  max-width: 150px;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  width: max-content;
+  max-width: 130px;
 }
 
 @keyframes pulseInspect {

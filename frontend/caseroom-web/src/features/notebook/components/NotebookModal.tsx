@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
-import type { Clue } from "../../../shared/types/game";
+import type { Clue, Player } from "../../../shared/types/game";
 import "../../../styles/components/NotebookModal.css";
 
 type NotebookModalProps = {
@@ -8,9 +8,11 @@ type NotebookModalProps = {
   onClose: () => void;
   streamAskDetectiveAi?: (question: string) => AsyncIterable<string>;
   tamperClue?: (clueId: string, fakeText: string) => Promise<void>;
+  visiblePlayers?: Player[];
+  shareClue?: (targetPlayerId: string, clueId: string) => Promise<void>;
 };
 
-export function NotebookModal({ clues, role, onClose, streamAskDetectiveAi, tamperClue }: NotebookModalProps) {
+export function NotebookModal({ clues, role, onClose, streamAskDetectiveAi, tamperClue, visiblePlayers = [], shareClue }: NotebookModalProps) {
   const [activeTab, setActiveTab] = useState<'clues' | 'ai'>('clues');
   
   // Tamper State
@@ -176,6 +178,30 @@ export function NotebookModal({ clues, role, onClose, streamAskDetectiveAi, tamp
                             >
                               ✏️ Làm giả ({clue.maxTamperLimit - clue.tamperCount} lần)
                             </button>
+                          )}
+                          {visiblePlayers.length > 0 && shareClue && (
+                            <select
+                              onChange={(e) => {
+                                if (e.target.value) {
+                                  shareClue(e.target.value, clue.id);
+                                  e.target.value = "";
+                                }
+                              }}
+                              style={{
+                                marginLeft: 8,
+                                padding: "4px 8px",
+                                borderRadius: 4,
+                                background: "rgba(255,255,255,0.1)",
+                                border: "1px solid rgba(255,255,255,0.2)",
+                                color: "#fff",
+                                fontSize: "0.8rem"
+                              }}
+                            >
+                              <option value="">Chia sẻ với...</option>
+                              {visiblePlayers.map(p => (
+                                <option key={p.id} value={p.id}>{p.name}</option>
+                              ))}
+                            </select>
                           )}
                         </div>
                       </>

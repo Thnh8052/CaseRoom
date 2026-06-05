@@ -4,13 +4,14 @@ type VisiblePlayersPanelProps = {
   currentRoom: MapRoom;
   players: Player[];
   talkingIds: Set<string>;
+  inspectingPlayers: Record<string, string>;
 };
 
 /**
  * Bảng điều khiển bên phải hiển thị danh sách những người chơi đang cùng phòng.
  * Các thẻ người chơi sẽ sáng lên khi họ đang sử dụng Push To Talk.
  */
-export function VisiblePlayersPanel({ currentRoom, players, talkingIds }: VisiblePlayersPanelProps) {
+export function VisiblePlayersPanel({ currentRoom, players, talkingIds, inspectingPlayers }: VisiblePlayersPanelProps) {
   return (
     <aside className="glass-sidebar">
       <h2>Investigators</h2>
@@ -26,7 +27,7 @@ export function VisiblePlayersPanel({ currentRoom, players, talkingIds }: Visibl
             {player.role === "Detective" && <span style={{ color: '#38bdf8', marginLeft: 4, fontSize: '0.8em' }}>(Thám tử)</span>}
           </strong>
           <span>{currentRoom.name}</span>
-          {player.currentObjectId && <em style={{ color: '#f59e0b' }}>🔍 Đang khám xét...</em>}
+          {inspectingPlayers[player.id] && <em style={{ color: '#f59e0b' }}>🔍 Đang khám xét...</em>}
         </div>
       ))}
     </aside>

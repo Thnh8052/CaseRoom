@@ -9,7 +9,8 @@ public sealed record MapRoomDto(
     int X,
     int Y,
     IReadOnlyList<MapObjectDto> Objects,
-    IReadOnlyList<string> ConnectedRoomIds
+    IReadOnlyList<string> ConnectedRoomIds,
+    IReadOnlyList<ItemDto>? FloorItems = null
 );
 
 public sealed record MapObjectDto(
@@ -19,6 +20,15 @@ public sealed record MapObjectDto(
     int Y,
     int? Width = null,
     int? Height = null
+);
+
+public sealed record ItemDto(
+    string Id,
+    string Name,
+    string Description,
+    string Type, // "Key", "Fuse", "Weapon", etc.
+    double X = 0,
+    double Y = 0
 );
 
 public sealed record CharacterAppearance(
@@ -41,15 +51,32 @@ public sealed record ClueDto(
     int MaxTamperLimit = 2
 );
 
+public sealed record PlayerStateDto(
+    string Id,
+    string Name,
+    string CurrentRoomId,
+    string? CurrentObjectId,
+    double X,
+    double Y,
+    bool IsReady,
+    bool IsTalking,
+    string Role,
+    CharacterAppearance Appearance,
+    IReadOnlyList<ItemDto> Inventory
+);
+
 public sealed record PlayerDto(
     string Id,
     string Name,
     string CurrentRoomId,
     string? CurrentObjectId,
+    double X,
+    double Y,
     bool IsReady,
     bool IsTalking,
     CharacterAppearance Appearance,
-    string Role
+    string Role,
+    IReadOnlyList<ItemDto> Inventory
 );
 
 public enum GamePhase
@@ -64,6 +91,7 @@ public enum GamePhase
 
 public enum GameMode
 {
+    SinglePlayer,
     NpcMurderer,
     PlayerMurderer,
     EveryoneHasSecrets

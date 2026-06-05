@@ -21,18 +21,19 @@ public static class GameMapFactory
                     new MapObjectDto("case_board", "Case Board", 1065, 120, 225, 225),
                     new MapObjectDto("npc_spot", "NPC Speaker", 180, 250, 180, 252)
                 },
-                new[] { "library", "kitchen" }
+                new[] { "study", "kitchen" }
             ),
             new(
-                "library",
-                "Library",
+                "study",
+                "Phòng Làm Việc",
                 0,
                 0,
                 new[]
                 {
-                    new MapObjectDto("bookshelf", "Bookshelf", 150, 200), // Left
-                    new MapObjectDto("desk", "Desk", 360, 250), // Center
-                    new MapObjectDto("fireplace", "Fireplace", 550, 150) // Top right
+                    new MapObjectDto("desk_study", "Bàn Làm Việc", 500, 350, 250, 150),
+                    new MapObjectDto("bookshelf_study", "Kệ Sách Lớn", 80, 100, 200, 400),
+                    new MapObjectDto("safe_study", "Két Sắt Bí Mật", 950, 400, 100, 100),
+                    new MapObjectDto("trash_bin_study", "Thùng Rác", 850, 500, 80, 80)
                 },
                 new[] { "briefing", "hallway" }
             ),

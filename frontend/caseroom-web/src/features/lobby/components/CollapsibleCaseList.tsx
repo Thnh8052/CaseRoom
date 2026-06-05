@@ -37,10 +37,10 @@ export function CollapsibleCaseList({
   }, [cases, selectedMode, query]);
 
   return (
-    <div className="glass-panel">
-      <div className="lobby-header">
+    <div style={{ marginTop: 16 }}>
+      <div className="lobby-header" style={{ justifyContent: 'space-between', alignItems: 'flex-start' }}>
         <div>
-          <h2>Selected Case</h2>
+          <h2 style={{ margin: 0 }}>Selected Case</h2>
 
           {selectedCase ? (
             <div style={{ marginTop: 4 }}>

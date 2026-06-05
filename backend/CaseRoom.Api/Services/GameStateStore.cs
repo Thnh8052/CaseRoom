@@ -243,9 +243,9 @@ public sealed class GameStateStore
                 return false;
             }
 
-            if (session.Players.Count < 4)
+            if (session.SelectedMode != GameMode.SinglePlayer && session.Players.Count < 4)
             {
-                error = "Cần ít nhất 4 người chơi để bắt đầu vụ án.";
+                error = "Cần ít nhất 4 người chơi để bắt đầu vụ án Multiplayer.";
                 return false;
             }
 
@@ -532,11 +532,12 @@ public sealed class GameStateStore
         }
     }
 
-    public bool TryCompleteInspection(string sessionId, string playerId, string objectId, out string? resultMessage, out ClueDto? unlockedClue, out string? error)
+    public bool TryCompleteInspection(string sessionId, string playerId, string objectId, out string? resultMessage, out ClueDto? unlockedClue, out ItemDto? acquiredItem, out string? error)
     {
         error = null;
         resultMessage = null;
         unlockedClue = null;
+        acquiredItem = null;
 
         var session = GetOrCreateSession(sessionId);
         lock (session)
@@ -567,9 +568,17 @@ public sealed class GameStateStore
                 player.UnlockedClues.Add(unlockedClue);
                 resultMessage = "Bạn đã tìm thấy một manh mối mới!";
             }
+            // Nếu không có clue, thử xem có item không
+            else if (session.AvailableItems.TryGetValue(objectId, out var items) && items.Count > 0)
+            {
+                acquiredItem = items[0];
+                items.RemoveAt(0);
+                player.Inventory.Add(acquiredItem);
+                resultMessage = $"Bạn nhặt được: {acquiredItem.Name}!";
+            }
             else
             {
-                resultMessage = "Bạn không tìm thấy điều gì khả nghi ở đây (Hoặc ai đó đã lấy đi manh mối rồi).";
+                resultMessage = "Bạn không tìm thấy điều gì khả nghi ở đây (Hoặc ai đó đã lấy đi rồi).";
             }
 
             return true;
@@ -615,13 +624,97 @@ public sealed class GameStateStore
                 return false;
             }
 
-            // Update clue
             player.UnlockedClues[clueIndex] = clue with 
             { 
                 FakeDescription = fakeText, 
                 TamperCount = clue.TamperCount + 1 
             };
+            return true;
+        }
+    }
 
+    public void UpdatePlayerPosition(string sessionId, string playerId, double x, double y)
+    {
+        var session = GetOrCreateSession(sessionId);
+        lock (session)
+        {
+            if (session.Players.TryGetValue(playerId, out var player))
+            {
+                player.X = x;
+                player.Y = y;
+            }
+        }
+    }
+
+    public bool TryDropItem(string sessionId, string playerId, string itemId, out string? error)
+    {
+        error = null;
+        var session = GetOrCreateSession(sessionId);
+        lock (session)
+        {
+            if (!session.Players.TryGetValue(playerId, out var player)) { error = "Player not found."; return false; }
+            var item = player.Inventory.FirstOrDefault(i => i.Id == itemId);
+            if (item == null) { error = "Item not found in inventory."; return false; }
+            player.Inventory.Remove(item);
+            
+            // Gán toạ độ rơi bằng toạ độ của người chơi
+            var droppedItem = item with { X = player.X, Y = player.Y + 20 };
+
+            if (!session.FloorItems.ContainsKey(player.CurrentRoomId))
+            {
+                session.FloorItems[player.CurrentRoomId] = new List<ItemDto>();
+            }
+            session.FloorItems[player.CurrentRoomId].Add(droppedItem);
+            return true;
+        }
+    }
+
+    public bool TryPickupFloorItem(string sessionId, string playerId, string itemId, out string? error)
+    {
+        error = null;
+        var session = GetOrCreateSession(sessionId);
+        lock (session)
+        {
+            if (!session.Players.TryGetValue(playerId, out var player)) { error = "Player not found."; return false; }
+            if (!session.FloorItems.TryGetValue(player.CurrentRoomId, out var floorItems)) { error = "No items in room."; return false; }
+            var item = floorItems.FirstOrDefault(i => i.Id == itemId);
+            if (item == null) { error = "Item not found on floor."; return false; }
+            floorItems.Remove(item);
+            player.Inventory.Add(item);
+            return true;
+        }
+    }
+
+    public bool TryGiveItem(string sessionId, string fromPlayerId, string toPlayerId, string itemId, out string? error)
+    {
+        error = null;
+        var session = GetOrCreateSession(sessionId);
+        lock (session)
+        {
+            if (!session.Players.TryGetValue(fromPlayerId, out var fromPlayer) || !session.Players.TryGetValue(toPlayerId, out var toPlayer)) { error = "Player not found."; return false; }
+            if (fromPlayer.CurrentRoomId != toPlayer.CurrentRoomId) { error = "Players must be in the same room."; return false; }
+            var item = fromPlayer.Inventory.FirstOrDefault(i => i.Id == itemId);
+            if (item == null) { error = "Item not found in inventory."; return false; }
+            fromPlayer.Inventory.Remove(item);
+            toPlayer.Inventory.Add(item);
+            return true;
+        }
+    }
+
+    public bool TryShareClue(string sessionId, string fromPlayerId, string toPlayerId, string clueId, out string? error)
+    {
+        error = null;
+        var session = GetOrCreateSession(sessionId);
+        lock (session)
+        {
+            if (!session.Players.TryGetValue(fromPlayerId, out var fromPlayer) || !session.Players.TryGetValue(toPlayerId, out var toPlayer)) { error = "Player not found."; return false; }
+            if (fromPlayer.CurrentRoomId != toPlayer.CurrentRoomId) { error = "Players must be in the same room."; return false; }
+            var clue = fromPlayer.UnlockedClues.FirstOrDefault(c => c.Id == clueId);
+            if (clue == null) { error = "Clue not found."; return false; }
+            if (!toPlayer.UnlockedClues.Any(c => c.Id == clueId))
+            {
+                toPlayer.UnlockedClues.Add(clue);
+            }
             return true;
         }
     }
