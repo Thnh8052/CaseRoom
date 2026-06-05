@@ -10,7 +10,24 @@ public sealed record MapRoomDto(
     int Y,
     IReadOnlyList<MapObjectDto> Objects,
     IReadOnlyList<string> ConnectedRoomIds,
-    IReadOnlyList<ItemDto>? FloorItems = null
+    IReadOnlyList<ItemDto>? FloorItems = null,
+    IReadOnlyList<ExitDto>? Exits = null
+);
+
+/// <summary>
+/// Mô tả một vùng cửa ra (Exit Zone) trên bản đồ.
+/// Khi avatar chạm vào zone này, sẽ tự động teleport sang phòng TargetRoomId.
+/// </summary>
+public sealed record ExitDto(
+    string TargetRoomId,
+    /// <summary>Vị trí X (tỉ lệ 0-1280) của tâm zone cửa</summary>
+    int ZoneCX,
+    /// <summary>Vị trí Y (tỉ lệ 0-720) của tâm zone cửa</summary>
+    int ZoneCY,
+    /// <summary>Chiều rộng zone cửa</summary>
+    int ZoneW = 80,
+    /// <summary>Chiều cao zone cửa</summary>
+    int ZoneH = 80
 );
 
 public sealed record MapObjectDto(

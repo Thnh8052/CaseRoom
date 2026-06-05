@@ -7,3 +7,4 @@
 *.txt
 caseroom_*
 *.md
+!README.md

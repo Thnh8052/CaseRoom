@@ -21,7 +21,14 @@ public static class GameMapFactory
                     new MapObjectDto("case_board", "Case Board", 1065, 120, 225, 225),
                     new MapObjectDto("npc_spot", "NPC Speaker", 180, 250, 180, 252)
                 },
-                new[] { "study", "kitchen" }
+                new[] { "study", "kitchen" },
+                Exits: new[]
+                {
+                    // Cửa sang Study: bên phải bản đồ
+                    new ExitDto("study",    ZoneCX: 1260, ZoneCY: 360, ZoneW: 40, ZoneH: 160),
+                    // Cửa sang Kitchen: phía dưới bản đồ
+                    new ExitDto("kitchen",  ZoneCX: 640,  ZoneCY: 700, ZoneW: 200, ZoneH: 40)
+                }
             ),
             new(
                 "study",
@@ -35,7 +42,14 @@ public static class GameMapFactory
                     new MapObjectDto("safe_study", "Két Sắt Bí Mật", 950, 400, 100, 100),
                     new MapObjectDto("trash_bin_study", "Thùng Rác", 850, 500, 80, 80)
                 },
-                new[] { "briefing", "hallway" }
+                new[] { "briefing", "hallway" },
+                Exits: new[]
+                {
+                    // Cửa về Briefing: bên trái
+                    new ExitDto("briefing", ZoneCX: 20,   ZoneCY: 360, ZoneW: 40, ZoneH: 160),
+                    // Cửa sang Hallway: phía dưới
+                    new ExitDto("hallway",  ZoneCX: 640,  ZoneCY: 700, ZoneW: 200, ZoneH: 40)
+                }
             ),
             new(
                 "kitchen",
@@ -44,11 +58,18 @@ public static class GameMapFactory
                 0,
                 new[]
                 {
-                    new MapObjectDto("sink", "Sink", 150, 250), // Left
-                    new MapObjectDto("fridge", "Fridge", 600, 150), // Right
-                    new MapObjectDto("trash_bin", "Trash Bin", 650, 350) // Bottom right
+                    new MapObjectDto("sink",      "Sink",      150, 250),
+                    new MapObjectDto("fridge",    "Fridge",    600, 150),
+                    new MapObjectDto("trash_bin", "Trash Bin", 650, 350)
                 },
-                new[] { "briefing", "hallway" }
+                new[] { "briefing", "hallway" },
+                Exits: new[]
+                {
+                    // Cửa về Briefing: phía trên
+                    new ExitDto("briefing", ZoneCX: 640,  ZoneCY: 20,  ZoneW: 200, ZoneH: 40),
+                    // Cửa sang Hallway: bên phải
+                    new ExitDto("hallway",  ZoneCX: 1260, ZoneCY: 360, ZoneW: 40,  ZoneH: 160)
+                }
             ),
             new(
                 "hallway",
@@ -57,10 +78,17 @@ public static class GameMapFactory
                 0,
                 new[]
                 {
-                    new MapObjectDto("painting", "Old Painting", 360, 150), // Top center
-                    new MapObjectDto("locked_door", "Locked Door", 360, 350) // Bottom center
+                    new MapObjectDto("painting",    "Old Painting", 360, 150),
+                    new MapObjectDto("locked_door", "Locked Door",  360, 350)
                 },
-                new[] { "library", "kitchen" }
+                new[] { "study", "kitchen" },
+                Exits: new[]
+                {
+                    // Cửa về Kitchen: bên trái
+                    new ExitDto("kitchen",  ZoneCX: 20,   ZoneCY: 360, ZoneW: 40,  ZoneH: 160),
+                    // Cửa về Study: phía trên
+                    new ExitDto("study",  ZoneCX: 640, ZoneCY: 20, ZoneW: 200,  ZoneH: 40)
+                }
             )
         };
     }

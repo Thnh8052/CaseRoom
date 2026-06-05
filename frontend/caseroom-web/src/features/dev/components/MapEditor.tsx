@@ -1,5 +1,5 @@
 import { useState, useRef, MouseEvent, ChangeEvent } from "react";
-import "../../../styles/components/map-editor.css";
+import "../styles/map-editor.css";
 
 type Hitbox = {
   id: string;

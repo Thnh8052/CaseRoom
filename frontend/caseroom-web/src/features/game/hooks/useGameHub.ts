@@ -85,7 +85,7 @@ export function useGameHub({ apiBaseUrl, onSelfRoomChanged }: UseGameHubOptions)
       .withAutomaticReconnect()
       .build();
 
-    connection.on("RoomOccupantsChanged", (payload: RoomOccupantsChangedPayload) => {
+    connection.on("RoomOccupantsChanged", (payload: RoomOccupantsChangedPayload & { floorItems?: Item[] }) => {
       setSnapshot(prev => {
         if (!prev) return prev;
 
@@ -96,6 +96,10 @@ export function useGameHub({ apiBaseUrl, onSelfRoomChanged }: UseGameHubOptions)
         }
 
         const next = { ...prev, players: payload.players };
+        const floorItems = payload.floorItems;
+        if (floorItems) {
+           next.rooms = next.rooms.map(r => r.id === payload.roomId ? { ...r, floorItems } : r);
+        }
         snapshotRef.current = next;
         return next;
       });

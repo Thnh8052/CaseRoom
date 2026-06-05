@@ -1,10 +1,8 @@
 import { useCallback, useState, useEffect } from "react";
-import { ControlPanel } from "../features/game/components/ControlPanel";
-import { CurrentRoomView } from "../features/game/components/CurrentRoomView";
-import { VisiblePlayersPanel } from "../features/game/components/VisiblePlayersPanel";
-import { InventoryPanel } from "../features/game/components/InventoryPanel";
-import { RoomTransitionOverlay } from "../features/game/components/RoomTransitionOverlay";
-import { ReconnectingOverlay } from "../features/game/components/ReconnectingOverlay";
+import { GameHUD } from "../features/game/components/hud/GameHUD";
+import { CurrentRoomView } from "../features/game/components/room/CurrentRoomView";
+import { RoomTransitionOverlay } from "../features/game/components/room/RoomTransitionOverlay";
+import { ReconnectingOverlay } from "../features/game/components/status/ReconnectingOverlay";
 import { JoinScreen } from "../features/lobby/components/JoinScreen";
 import { LobbyScreen } from "../features/lobby/components/LobbyScreen";
 import { NotebookModal } from "../features/notebook/components/NotebookModal";
@@ -89,8 +87,9 @@ export default function App() {
       const result = await gameHub.join(targetSessionId, playerName);
       if (mode === "SinglePlayer") {
         await gameHub.selectMode("SinglePlayer");
+      } else {
+        await voiceHub.start(targetSessionId, result.player.id);
       }
-      await voiceHub.start(targetSessionId, result.player.id);
     } catch (error) {
       alert(error instanceof Error ? error.message : "Could not join session.");
     }
@@ -134,26 +133,7 @@ export default function App() {
 
   return (
     <main className="shell">
-      <ControlPanel
-        gameStatus={gameHub.status}
-        voiceStatus={voiceHub.status}
-        currentRoom={gameHub.currentRoom}
-        rooms={gameHub.snapshot.rooms}
-        isPushToTalkDown={pushToTalk.isPushToTalkDown}
-        isMoving={roomTransition.isMoving}
-        targetRoom={roomTransition.targetRoom}
-        onMoveToRoom={roomTransition.moveWithTransition}
-        onInteractObject={gameHub.interactObject}
-        onStartPushToTalk={pushToTalk.startPushToTalk}
-        onStopPushToTalk={pushToTalk.stopPushToTalk}
-        isHost={gameHub.isHost}
-        canExplore={gameHub.canExplore}
-        snapshot={gameHub.snapshot}
-        onStartBriefing={gameHub.startBriefing}
-        onStartExploration={gameHub.startExploration}
-
-      />
-
+      {/* Map chiếm toàn màn hình */}
       <section className="map-panel">
         <CurrentRoomView
           room={gameHub.currentRoom}
@@ -162,13 +142,14 @@ export default function App() {
           talkingIds={voiceHub.talkingIds}
           inspectingPlayers={gameHub.inspectingPlayers}
           isMoving={roomTransition.isMoving}
-          canExplore={gameHub.canExplore}
+          canExplore={gameHub.canExplore && !isNotebookOpen}
           onInteractObject={gameHub.interactObject}
           onStartInspection={gameHub.startInspection}
           onCancelInspection={gameHub.cancelInspection}
           onCompleteInspection={gameHub.completeInspection}
           onPickupFloorItem={gameHub.pickupFloorItem}
           onUpdatePosition={gameHub.updatePosition}
+          onTeleportToRoom={roomTransition.moveWithTransition}
         />
         <RoomTransitionOverlay
           isMoving={roomTransition.isMoving}
@@ -176,23 +157,24 @@ export default function App() {
         />
       </section>
 
-      <div>
-        <VisiblePlayersPanel
-          currentRoom={gameHub.currentRoom}
-          players={gameHub.visiblePlayers}
-          talkingIds={voiceHub.talkingIds}
-          inspectingPlayers={gameHub.inspectingPlayers}
-        />
-
-        {gameHub.latestSelf && (
-          <InventoryPanel
-            inventory={gameHub.latestSelf.inventory ?? []}
-            onDropItem={gameHub.dropItem}
-            onGiveItem={gameHub.giveItem}
-            visiblePlayers={gameHub.visiblePlayers.filter(p => p.id !== gameHub.latestSelf?.id)}
-          />
-        )}
-      </div>
+      {/* Floating HUD — tất cả UI nổi phía trên map */}
+      <GameHUD
+        snapshot={gameHub.snapshot}
+        currentRoom={gameHub.currentRoom}
+        players={gameHub.visiblePlayers}
+        talkingIds={voiceHub.talkingIds}
+        inspectingPlayers={gameHub.inspectingPlayers}
+        selfPlayer={gameHub.latestSelf ?? undefined}
+        voiceStatus={voiceHub.status}
+        isHost={gameHub.isHost}
+        isMoving={roomTransition.isMoving}
+        isPushToTalkDown={pushToTalk.isPushToTalkDown}
+        onStartExploration={gameHub.startExploration}
+        onStartPushToTalk={pushToTalk.startPushToTalk}
+        onStopPushToTalk={pushToTalk.stopPushToTalk}
+        onDropItem={gameHub.dropItem}
+        onGiveItem={gameHub.giveItem}
+      />
 
       {/* Result Modal */}
       {gameHub.inspectionResult && (
@@ -220,7 +202,7 @@ export default function App() {
       {isNotebookOpen && (
         <NotebookModal
           clues={gameHub.myClues}
-          role={gameHub.self?.role || "Detective"}
+          role={gameHub.latestSelf?.role || "Detective"}
           onClose={() => setIsNotebookOpen(false)}
           streamAskDetectiveAi={gameHub.streamAskDetectiveAi}
           tamperClue={gameHub.tamperClue}

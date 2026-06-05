@@ -356,7 +356,7 @@ public async Task StartInspection(string objectId)
         .SendAsync("PlayerStartedInspection", conn.Value.PlayerId, objectId);
 }
 
-public async Task CancelInspection()
+public async Task CancelInspection(string objectId)
 {
     var conn = store.GetGameConnection(Context.ConnectionId);
     var player = store.GetCallerPlayer(Context.ConnectionId);
@@ -397,10 +397,13 @@ public async Task CancelInspection()
     private Task BroadcastRoomOccupants(string sessionId, string roomId)
     {
         var players = store.GetPlayersInRoom(sessionId, roomId);
+        var session = store.GetOrCreateSession(sessionId);
+        var floorItems = session.FloorItems.TryGetValue(roomId, out var items) ? items : new List<ItemDto>();
         return Clients.Group(HubGroupNames.RoomGroup(sessionId, roomId)).SendAsync("RoomOccupantsChanged", new
         {
             roomId,
-            players
+            players,
+            floorItems
         });
     }
 

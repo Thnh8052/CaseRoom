@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from "react";
 import type { Clue, Player } from "../../../shared/types/game";
-import "../../../styles/components/NotebookModal.css";
+import "../styles/NotebookModal.css";
 
 type NotebookModalProps = {
   clues: Clue[];

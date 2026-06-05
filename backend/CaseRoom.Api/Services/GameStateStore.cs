@@ -90,12 +90,15 @@ public sealed class GameStateStore
                 return existing;
             }
 
+            var playerCount = session.Players.Count;
             var player = new PlayerState
             {
                 Id = string.IsNullOrWhiteSpace(playerId) ? Guid.NewGuid().ToString("N") : playerId,
                 Name = string.IsNullOrWhiteSpace(playerName) ? "Detective" : playerName.Trim(),
                 ConnectionId = connectionId,
-                CurrentRoomId = "briefing" // Phòng mặc định khi mới vào
+                CurrentRoomId = "briefing", // Phòng mặc định khi mới vào
+                X = 200 + (playerCount * 80),
+                Y = 620
             };
 
             session.Players[player.Id] = player;
@@ -483,10 +486,24 @@ public sealed class GameStateStore
             }
 
             // Kiểm tra ràng buộc di chuyển
-            if (currentRoom is not null && currentRoom.Id != targetRoom.Id && !currentRoom.ConnectedRoomIds.Contains(targetRoom.Id))
+            if (currentRoom is not null && currentRoom.Id != targetRoom.Id)
             {
-                error = $"Room '{targetRoom.Name}' is not connected to current room.";
-                return false;
+                if (!currentRoom.ConnectedRoomIds.Contains(targetRoom.Id))
+                {
+                    error = $"Room '{targetRoom.Name}' is not connected to current room.";
+                    return false;
+                }
+                var exit = currentRoom.Exits?.FirstOrDefault(e => e.TargetRoomId == targetRoom.Id);
+                if (exit != null)
+                {
+                    var dist = Math.Sqrt(Math.Pow(player.X - exit.ZoneCX, 2) + Math.Pow(player.Y - exit.ZoneCY, 2));
+                    var maxDist = Math.Max(exit.ZoneW, exit.ZoneH) / 2.0 + 150;
+                    if (dist > maxDist)
+                    {
+                        error = "You are too far from the exit.";
+                        return false;
+                    }
+                }
             }
 
             oldRoomId = player.CurrentRoomId;
@@ -516,6 +533,19 @@ public sealed class GameStateStore
             {
                 error = "You can only interact with objects during Exploration phase.";
                 return false;
+            }
+
+            var obj = session.Rooms.SelectMany(r => r.Objects).FirstOrDefault(o => o.Id == objectId);
+            if (obj != null)
+            {
+                var objCX = obj.X + (obj.Width ?? 0) / 2.0;
+                var objCY = obj.Y + (obj.Height ?? 0) / 2.0;
+                var dist = Math.Sqrt(Math.Pow(player.X - objCX, 2) + Math.Pow(player.Y - objCY, 2));
+                if (dist > 200)
+                {
+                    error = "You are too far from this object.";
+                    return false;
+                }
             }
 
             var room = session.Rooms.FirstOrDefault(r => r.Id == player.CurrentRoomId);
@@ -679,6 +709,14 @@ public sealed class GameStateStore
             if (!session.FloorItems.TryGetValue(player.CurrentRoomId, out var floorItems)) { error = "No items in room."; return false; }
             var item = floorItems.FirstOrDefault(i => i.Id == itemId);
             if (item == null) { error = "Item not found on floor."; return false; }
+
+            var dist = Math.Sqrt(Math.Pow(player.X - item.X, 2) + Math.Pow(player.Y - item.Y, 2));
+            if (dist > 200)
+            {
+                error = "You are too far from this item.";
+                return false;
+            }
+
             floorItems.Remove(item);
             player.Inventory.Add(item);
             return true;

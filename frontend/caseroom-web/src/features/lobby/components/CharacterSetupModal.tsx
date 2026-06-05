@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { CharacterAppearance } from "../../../shared/types/game";
 
-import "../../../styles/components/character-setup.css";
+import "../styles/character-setup.css";
 
 type Props = {
   initialAppearance?: CharacterAppearance;
@@ -110,4 +110,3 @@ export function CharacterSetupModal({ initialAppearance, onSave, onClose }: Prop
     </div>
   );
 }
-

@@ -1,4 +1,384 @@
-/* Glassmorphism Side Panels */
+/* ===================================================
+   GAME HUD — Floating Overlay System
+=================================================== */
+
+/* Shared HUD panel base */
+.hud-panel {
+  position: fixed;
+  z-index: 200;
+  background: rgba(10, 15, 28, 0.75);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  padding: 14px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45);
+}
+
+.hud-top-left {
+  top: 16px;
+  left: 16px;
+  min-width: 220px;
+  max-width: 300px;
+}
+
+.hud-top-center {
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  min-width: 200px;
+  max-width: 300px;
+  text-align: center;
+  font-weight: bold;
+  font-size: 1.2rem;
+  color: #fff;
+  border-bottom-left-radius: 12px;
+  border-bottom-right-radius: 12px;
+  background: rgba(15, 23, 42, 0.95);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-top: none;
+  padding: 8px 16px;
+}
+.role-murderer { color: #ef4444; }
+.role-detective { color: #38bdf8; }
+
+.hud-top-right {
+  top: 16px;
+  right: 16px;
+  min-width: 200px;
+  max-width: 260px;
+}
+
+/* Room info inside HUD */
+.hud-room-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.hud-eyebrow {
+  font-size: 0.65rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #92a5ff;
+}
+
+.hud-room-name {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #f1f5f9;
+}
+
+.hud-moving {
+  font-size: 0.75rem;
+  color: #38bdf8;
+  animation: pulse 1s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+.hud-hint {
+  font-size: 0.68rem;
+  color: rgba(255,255,255,0.35);
+  margin: 0;
+  line-height: 1.4;
+}
+
+.hud-briefing {
+  background: rgba(234, 179, 8, 0.08);
+  border: 1px solid rgba(234, 179, 8, 0.2);
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 0.82rem;
+  color: #fde68a;
+  line-height: 1.5;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.hud-briefing p { margin: 0; }
+
+.hud-action-btn {
+  background: linear-gradient(135deg, #38bdf8, #6366f1);
+  border: none;
+  border-radius: 10px;
+  padding: 8px 14px;
+  color: #fff;
+  font-weight: 700;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: opacity 0.2s, transform 0.1s;
+}
+.hud-action-btn:hover { opacity: 0.85; transform: scale(1.02); }
+
+/* Players Panel */
+.hud-players-toggle {
+  background: transparent;
+  border: none;
+  color: #e2e8f0;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0;
+  text-align: left;
+}
+.hud-players-toggle:hover { background: transparent; color: #38bdf8; }
+
+.hud-players-list-wrapper {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 0.3s ease-in-out;
+}
+
+.hud-players-list-wrapper.open {
+  grid-template-rows: 1fr;
+}
+
+.hud-players-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow: hidden;
+}
+.hud-players-list > :first-child {
+  margin-top: 8px; /* padding visually when open */
+}
+
+.hud-player-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  background: rgba(30, 41, 59, 0.5);
+  border: 1px solid rgba(255,255,255,0.05);
+  border-radius: 10px;
+  transition: border-color 0.2s;
+}
+
+.hud-player-card.speaking {
+  border-color: rgba(52, 211, 153, 0.6);
+  background: rgba(16, 185, 129, 0.1);
+}
+
+.hud-player-avatar {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  font-size: 0.9rem;
+  color: #fff;
+  flex-shrink: 0;
+}
+
+.hud-player-info strong {
+  font-size: 0.85rem;
+  color: #f1f5f9;
+}
+
+/* ── INVENTORY HOTBAR ── */
+.hud-hotbar {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 8px;
+  z-index: 200;
+  background: rgba(10, 15, 28, 0.75);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  padding: 10px 14px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45);
+}
+
+.hud-slot {
+  width: 64px;
+  height: 64px;
+  border-radius: 10px;
+  border: 1px solid rgba(255,255,255,0.1);
+  background: rgba(30, 41, 59, 0.5);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s;
+  padding: 4px;
+}
+
+.hud-slot.empty { cursor: default; opacity: 0.35; }
+.hud-slot.has-item:hover { border-color: rgba(56, 189, 248, 0.5); background: rgba(56, 189, 248, 0.1); }
+.hud-slot.active {
+  border-color: #38bdf8;
+  background: rgba(56, 189, 248, 0.15);
+  box-shadow: 0 0 12px rgba(56, 189, 248, 0.3);
+}
+
+.slot-icon { font-size: 1.6rem; line-height: 1; }
+.slot-name {
+  font-size: 0.55rem;
+  color: #94a3b8;
+  text-align: center;
+  margin-top: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  width: 100%;
+}
+.slot-empty { font-size: 1.2rem; color: rgba(255,255,255,0.15); }
+
+/* ── ITEM POPUP ── */
+.hud-item-popup {
+  position: fixed;
+  bottom: 100px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 210;
+  background: rgba(10, 15, 28, 0.92);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(56, 189, 248, 0.3);
+  border-radius: 16px;
+  padding: 16px 20px;
+  min-width: 280px;
+  max-width: 360px;
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.6), 0 0 20px rgba(56, 189, 248, 0.1);
+  animation: popIn 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.hud-item-popup-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-weight: 700;
+  color: #f1f5f9;
+  margin-bottom: 8px;
+}
+
+.popup-close {
+  background: transparent;
+  border: none;
+  color: #94a3b8;
+  cursor: pointer;
+  font-size: 1rem;
+  padding: 2px 6px;
+  border-radius: 6px;
+}
+.popup-close:hover { background: rgba(255,255,255,0.05); color: #f1f5f9; }
+
+.hud-item-desc {
+  font-size: 0.82rem;
+  color: #cbd5e1;
+  line-height: 1.5;
+  margin: 0 0 14px;
+}
+
+.hud-item-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.popup-action-btn {
+  flex: 1;
+  padding: 8px 12px;
+  border-radius: 10px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.popup-action-btn.drop {
+  background: rgba(239, 68, 68, 0.15);
+  color: #fca5a5;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+.popup-action-btn.drop:hover { background: rgba(239, 68, 68, 0.25); }
+.popup-action-btn.give {
+  background: rgba(52, 211, 153, 0.15);
+  color: #6ee7b7;
+  border: 1px solid rgba(52, 211, 153, 0.3);
+}
+.popup-action-btn.give:hover { background: rgba(52, 211, 153, 0.25); }
+
+.hud-give-targets {
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.give-target-btn {
+  display: flex;
+  align-items: center;
+  padding: 8px 12px;
+  background: rgba(30, 41, 59, 0.6);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 10px;
+  color: #e2e8f0;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  text-align: left;
+}
+.give-target-btn:hover {
+  background: rgba(56, 189, 248, 0.1);
+  border-color: rgba(56, 189, 248, 0.3);
+}
+
+/* ── PTT Button ── */
+.hud-ptt {
+  position: fixed;
+  bottom: 20px;
+  left: 20px;
+  z-index: 200;
+}
+.hud-ptt .hud-hint {
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.hud-ptt-btn {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  background: rgba(51, 65, 85, 0.95);
+  border: 2px solid rgba(255,255,255,0.25);
+  color: #cbd5e1;
+  font-size: 0.75rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  backdrop-filter: blur(8px);
+}
+.hud-ptt-btn:hover { border-color: rgba(56, 189, 248, 0.4); }
+.hud-ptt-btn.active {
+  background: rgba(16, 185, 129, 0.3);
+  border-color: #10b981;
+  color: #6ee7b7;
+  box-shadow: 0 0 20px rgba(16, 185, 129, 0.4);
+}
+
+/* ===================================================
+   LEGACY Glassmorphism Side Panels (kept for Lobby)
+=================================================== */
+
+
 .glass-sidebar {
   background: rgba(15, 23, 42, 0.45);
   backdrop-filter: blur(12px);
@@ -10,6 +390,12 @@
   gap: 16px;
   overflow-y: auto;
 }
+
+@keyframes popIn {
+  from { opacity: 0; transform: translateX(-50%) scale(0.92); }
+  to   { opacity: 1; transform: translateX(-50%) scale(1); }
+}
+
 
 .glass-sidebar:last-child {
   border-right: none;
@@ -35,17 +421,12 @@
 .layered-room {
   position: relative;
   width: 100%;
-  max-width: 1280px;
-  aspect-ratio: 1280 / 720;
-  margin: 0 auto;
-  border-radius: 24px;
+  height: 100%;
+  flex: 1;
   background: #0b1120;
-  border: 1px solid rgba(56, 189, 248, 0.3);
-  box-shadow:
-    0 0 40px rgba(14, 165, 233, 0.15),
-    inset 0 0 60px rgba(14, 165, 233, 0.1);
   overflow: hidden;
 }
+
 
 /* Grid fallback if background image is missing */
 .layered-room::before {
@@ -458,4 +839,148 @@
 
 .player-card.speaking strong {
   color: #34d399;
+}
+
+/* ---------------------------------
+   VISUAL OVERHAUL
+--------------------------------- */
+
+/* Vignette / HUD Overlay */
+.hud-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 99;
+  background: radial-gradient(circle at center, transparent 40%, rgba(0, 0, 0, 0.6) 100%);
+  box-shadow: inset 0 0 100px rgba(0, 0, 0, 0.8);
+}
+
+/* Avatar Animations */
+.room-avatar.is-moving {
+  animation: wobbleWalk 0.4s infinite alternate ease-in-out;
+}
+
+@keyframes wobbleWalk {
+  0% { transform: translate(-50%, -50%) rotate(-5deg) translateY(-2px); }
+  100% { transform: translate(-50%, -50%) rotate(5deg) translateY(2px); }
+}
+
+.avatar-shadow {
+  position: absolute;
+  width: 30px;
+  height: 10px;
+  background: rgba(0, 0, 0, 0.4);
+  border-radius: 50%;
+  transform: translate(-50%, -50%) translateY(22px);
+  filter: blur(2px);
+  z-index: 49;
+  transition: left 0.4s ease-out, top 0.4s ease-out;
+}
+
+/* Interactive Objects UX */
+.room-object-btn.in-range .room-object-img {
+  filter: drop-shadow(0 0 12px rgba(253, 224, 71, 0.8));
+}
+
+.floating-action-btn {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: rgba(15, 23, 42, 0.85);
+  backdrop-filter: blur(4px);
+  border: 1px solid #fde047;
+  color: #fde047;
+  padding: 6px 12px;
+  border-radius: 12px;
+  font-weight: bold;
+  font-size: 0.85rem;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5), 0 0 15px rgba(253, 224, 71, 0.3);
+  pointer-events: none;
+  z-index: 20;
+  animation: bounceBtn 1.5s infinite ease-in-out;
+  white-space: nowrap;
+}
+
+@keyframes bounceBtn {
+  0%, 100% { transform: translate(-50%, -50%) translateY(0); }
+  50% { transform: translate(-50%, -50%) translateY(-6px); }
+}
+
+/* Floor Items Overhaul */
+.floor-item-icon {
+  font-size: 24px;
+  filter: drop-shadow(0 0 8px rgba(56, 189, 248, 0.8));
+  animation: floatItem 2s infinite ease-in-out;
+}
+
+.floor-item-aura {
+  position: absolute;
+  width: 40px;
+  height: 15px;
+  background: radial-gradient(ellipse at center, rgba(56, 189, 248, 0.5) 0%, transparent 70%);
+  transform: translate(-50%, -50%) translateY(12px);
+  z-index: 4;
+}
+
+@keyframes floatItem {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+
+.floor-item-btn {
+  position: absolute;
+  background: transparent;
+  border: none;
+  z-index: 5;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+/* ---------------------------------
+   EXIT ZONE (RPG Teleport Doors)
+--------------------------------- */
+
+.room-exit-zone {
+  position: absolute;
+  z-index: 6;
+  border: 2px dashed rgba(251, 191, 36, 0.35);
+  border-radius: 8px;
+  background: rgba(251, 191, 36, 0.04);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  transition: all 0.3s ease;
+}
+
+.room-exit-zone.active {
+  border-color: rgba(251, 191, 36, 0.85);
+  background: rgba(251, 191, 36, 0.12);
+  animation: exitPulse 0.8s ease-in-out infinite alternate;
+}
+
+@keyframes exitPulse {
+  from { box-shadow: 0 0 0 0 rgba(251, 191, 36, 0.3); }
+  to   { box-shadow: 0 0 18px 6px rgba(251, 191, 36, 0.15); }
+}
+
+.exit-label {
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: capitalize;
+  color: rgba(251, 191, 36, 0.5);
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
+  white-space: nowrap;
+  transition: color 0.3s;
+}
+
+.room-exit-zone.active .exit-label {
+  color: rgba(251, 191, 36, 1);
+  animation: bounceBtn 1s ease-in-out infinite;
 }

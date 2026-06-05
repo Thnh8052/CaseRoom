@@ -1,4 +1,4 @@
-import type { MapRoom } from "../../../shared/types/game";
+import type { MapRoom } from "../../../../shared/types/game";
 
 type RoomTransitionOverlayProps = {
   isMoving: boolean;

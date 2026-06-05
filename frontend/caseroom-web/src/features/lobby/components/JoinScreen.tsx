@@ -1,5 +1,5 @@
 import { useState } from "react";
-import "../../../styles/pages/start-screen.css";
+import "../styles/start-screen.css";
 
 type JoinScreenProps = {
   sessionId: string;

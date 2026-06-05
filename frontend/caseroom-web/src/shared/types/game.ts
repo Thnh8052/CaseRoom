@@ -15,6 +15,15 @@ export type MapRoom = {
   objects: MapObject[];
   connectedRoomIds: string[];
   floorItems: Item[];
+  exits?: RoomExit[];
+};
+
+export type RoomExit = {
+  targetRoomId: string;
+  zoneCX: number;
+  zoneCY: number;
+  zoneW: number;
+  zoneH: number;
 };
 
 export type Item = {

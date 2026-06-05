@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { Item, Player } from "../../../shared/types/game";
+import type { Item, Player } from "../../../../shared/types/game";
 
 type Props = {
   inventory: Item[];

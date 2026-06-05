@@ -2,7 +2,7 @@ import { useState } from "react";
 import { GameSetupPanel } from "./GameSetupPanel";
 import { CharacterSetupModal } from "./CharacterSetupModal";
 import type { Player, SessionSnapshot, CaseSummary, GameMode, CharacterAppearance } from "../../../shared/types/game";
-import "../../../styles/components/lobby.css";
+import "../styles/lobby.css";
 
 type Props = {
   sessionId: string;
