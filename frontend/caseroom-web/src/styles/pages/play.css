@@ -1,0 +1,457 @@
+/* Glassmorphism Side Panels */
+.glass-sidebar {
+  background: rgba(15, 23, 42, 0.45);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-right: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  overflow-y: auto;
+}
+
+.glass-sidebar:last-child {
+  border-right: none;
+  border-left: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.glass-sidebar h2 {
+  margin: 0;
+  font-size: 1.5rem;
+  color: #f8fafc;
+  font-weight: 700;
+}
+
+.glass-sidebar h3 {
+  margin: 16px 0 8px;
+  font-size: 0.9rem;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* Layered Room Rendering */
+.layered-room {
+  position: relative;
+  width: 100%;
+  max-width: 1280px;
+  aspect-ratio: 1280 / 720;
+  margin: 0 auto;
+  border-radius: 24px;
+  background: #0b1120;
+  border: 1px solid rgba(56, 189, 248, 0.3);
+  box-shadow:
+    0 0 40px rgba(14, 165, 233, 0.15),
+    inset 0 0 60px rgba(14, 165, 233, 0.1);
+  overflow: hidden;
+}
+
+/* Grid fallback if background image is missing */
+.layered-room::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(56, 189, 248, 0.1) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(56, 189, 248, 0.1) 1px, transparent 1px);
+  background-size: 30px 30px;
+  background-position: center center;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.room-bg {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  z-index: 1;
+  pointer-events: none;
+}
+
+/* Objects */
+.room-object-btn {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  background: transparent !important;
+  border: none !important;
+  outline: none !important;
+  cursor: pointer;
+  z-index: 5;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.room-object-btn:hover,
+.room-object-btn:active,
+.room-object-btn:focus {
+  background: transparent !important;
+  border: none !important;
+  outline: none !important;
+}
+
+.room-object-img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  filter: drop-shadow(0 0 0 transparent);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.room-object-btn:hover:not(:disabled) .room-object-img {
+  filter: drop-shadow(0 0 15px rgba(56, 189, 248, 0.8));
+  transform: scale(1.05);
+}
+
+.room-object-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+/* Fallback subtle hitbox if image is missing */
+.room-object-btn::before {
+  content: "";
+  position: absolute;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: rgba(56, 189, 248, 0.05);
+  border: 2px dashed rgba(56, 189, 248, 0.2);
+  z-index: -1;
+  opacity: 0;
+  /* Ẩn đi mặc định để không cản trở drop-shadow của PNG */
+  transition: all 0.2s;
+}
+
+.room-object-btn.missing-img::before {
+  opacity: 1;
+  /* Chỉ hiện lên khi ảnh bị lỗi */
+}
+
+.room-object-btn.missing-img:hover:not(:disabled)::before {
+  background: rgba(14, 165, 233, 0.3);
+  border-style: solid;
+  border-color: #38bdf8;
+  transform: scale(1.2);
+  box-shadow: 0 0 25px rgba(56, 189, 248, 0.6);
+}
+
+/* Tooltip for Objects */
+.room-object-tooltip {
+  position: absolute;
+  bottom: 110%;
+  left: 50%;
+  transform: translateX(-50%) translateY(10px);
+  background: rgba(15, 23, 42, 0.95);
+  color: #bae6fd;
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  border: 1px solid rgba(56, 189, 248, 0.5);
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.5);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.room-object-btn:hover:not(:disabled) .room-object-tooltip {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+/* Inspect Popup */
+.inspect-popup {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 10;
+  pointer-events: auto;
+  animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+}
+
+@keyframes popIn {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -30%) scale(0.5);
+  }
+
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+}
+
+.btn-inspect {
+  background: rgba(15, 23, 42, 0.9);
+  border: 1px solid #38bdf8;
+  color: #38bdf8;
+  padding: 8px 16px;
+  border-radius: 20px;
+  font-weight: bold;
+  font-size: 0.9rem;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.btn-inspect:hover {
+  background: rgba(56, 189, 248, 0.2);
+  transform: scale(1.05);
+}
+
+/* Inspect Progress Bar */
+.inspect-progress-container {
+  position: absolute;
+  top: 110%;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 120px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  z-index: 10;
+}
+
+.inspect-progress-text {
+  font-size: 0.75rem;
+  color: #38bdf8;
+  font-weight: bold;
+  white-space: nowrap;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+}
+
+.inspect-progress-bg {
+  width: 100%;
+  height: 8px;
+  background: rgba(0, 0, 0, 0.6);
+  border: 1px solid rgba(56, 189, 248, 0.3);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.inspect-progress-fill {
+  height: 100%;
+  background: #38bdf8;
+  transition: width 0.1s linear;
+}
+
+.inspect-progress-container.player-top {
+  top: auto;
+  bottom: 110%;
+}
+
+/* Bubble for other players inspecting */
+.inspect-bubble {
+  position: absolute;
+  top: -46px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(15, 23, 42, 0.95);
+  color: #fff;
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: bold;
+  white-space: nowrap;
+  pointer-events: none;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
+  border: 1px solid #38bdf8;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  animation: pulseInspect 2s infinite;
+  max-width: 150px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+@keyframes pulseInspect {
+  0% { box-shadow: 0 0 0 0 rgba(56, 189, 248, 0.4); }
+  70% { box-shadow: 0 0 0 6px rgba(56, 189, 248, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(56, 189, 248, 0); }
+}
+
+.inspect-bubble::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border-width: 5px;
+  border-style: solid;
+  border-color: #38bdf8 transparent transparent transparent;
+}
+
+@keyframes floatBubble {
+  from { transform: translateX(-50%) translateY(0); }
+  to { transform: translateX(-50%) translateY(-4px); }
+}
+
+/* Avatar */
+.room-avatar {
+  position: absolute;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-weight: 800;
+  font-size: 20px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+  border: 3px solid rgba(255, 255, 255, 0.2);
+  transform: translate(-50%, -50%);
+  z-index: 50;
+  /* Smooth movement across map */
+  transition: left 0.4s ease-out, top 0.4s ease-out, transform 0.1s;
+  animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.room-avatar.self-avatar {
+  border: 3px solid #38bdf8;
+  box-shadow: 0 0 15px rgba(56, 189, 248, 0.6), 0 4px 12px rgba(0, 0, 0, 0.5);
+}
+
+.room-avatar.speaking {
+  animation: radarRipple 1.2s infinite ease-out;
+  border-color: #34d399;
+}
+
+@keyframes radarRipple {
+  0% {
+    box-shadow: 0 0 0 0 rgba(52, 211, 153, 0.6);
+  }
+
+  100% {
+    box-shadow: 0 0 0 20px rgba(52, 211, 153, 0);
+  }
+}
+
+/* Control Panel Buttons */
+.nav-btn {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 12px 16px;
+  background: rgba(30, 41, 59, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 12px;
+  color: #e2e8f0;
+  font-weight: 500;
+  transition: all 0.2s;
+  cursor: pointer;
+}
+
+.nav-btn:hover:not(:disabled) {
+  background: rgba(51, 65, 85, 0.6);
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+.nav-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.nav-btn.active-room {
+  background: rgba(14, 165, 233, 0.15);
+  border-color: rgba(56, 189, 248, 0.5);
+  color: #38bdf8;
+  box-shadow: 0 0 20px rgba(14, 165, 233, 0.1);
+}
+
+/* Big PTT Button */
+.ptt-btn-wrapper {
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 20px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: auto;
+}
+
+.ptt-btn {
+  width: 100%;
+  padding: 16px;
+  border-radius: 14px;
+  background: #334155;
+  color: #94a3b8;
+  font-weight: 700;
+  border: none;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.ptt-btn:active,
+.ptt-btn.active {
+  background: #10b981;
+  color: white;
+  transform: scale(0.98);
+  box-shadow: 0 0 20px rgba(16, 185, 129, 0.4);
+}
+
+/* Briefing Panel inside Control */
+.briefing-card {
+  background: rgba(234, 179, 8, 0.1);
+  border: 1px solid rgba(234, 179, 8, 0.3);
+  padding: 16px;
+  border-radius: 16px;
+  margin-top: 16px;
+}
+
+.briefing-card h3 {
+  color: #fde047;
+  margin-top: 0;
+}
+
+.briefing-card p {
+  color: #fef08a;
+  font-size: 0.85rem;
+  line-height: 1.5;
+  margin-bottom: 0;
+}
+
+/* Visible Players Card */
+.player-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px;
+  border-radius: 12px;
+  background: rgba(30, 41, 59, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  transition: all 0.2s;
+}
+
+.player-card.speaking {
+  background: rgba(16, 185, 129, 0.15);
+  border-color: rgba(52, 211, 153, 0.5);
+}
+
+.player-card strong {
+  color: #f1f5f9;
+}
+
+.player-card span,
+.player-card em {
+  font-size: 0.75rem;
+  color: #94a3b8;
+}
+
+.player-card.speaking strong {
+  color: #34d399;
+}

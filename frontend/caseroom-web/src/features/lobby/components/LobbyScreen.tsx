@@ -1,0 +1,125 @@
+import { useState } from "react";
+import { GameSetupPanel } from "./GameSetupPanel";
+import { CharacterSetupModal } from "./CharacterSetupModal";
+import type { Player, SessionSnapshot, CaseSummary, GameMode, CharacterAppearance } from "../../../shared/types/game";
+import "../../../styles/components/lobby.css";
+
+type Props = {
+  sessionId: string;
+  players: Player[];
+  snapshot: SessionSnapshot;
+  availableCases: CaseSummary[];
+  isHost: boolean;
+  selfPlayer: Player | null;
+  onSelectMode: (mode: GameMode) => void;
+  onSelectCase: (caseId: string) => void;
+  onStartBriefing: () => void;
+  onToggleReady: () => void;
+  onSetAppearance: (appearance: CharacterAppearance) => void;
+};
+
+export function LobbyScreen({
+  sessionId,
+  players,
+  snapshot,
+  availableCases,
+  isHost,
+  selfPlayer,
+  onSelectMode,
+  onSelectCase,
+  onStartBriefing,
+  onToggleReady,
+  onSetAppearance
+}: Props) {
+  const [showAppearanceModal, setShowAppearanceModal] = useState(false);
+
+  return (
+    <div className="lobby-screen">
+      {/* Left Column: Players */}
+      <div className="glass-panel">
+        <h2 className="lobby-header">
+          CaseRoom <span className="lobby-session-id">#{sessionId}</span>
+        </h2>
+        <p className="lobby-subtitle">Waiting for investigators to join...</p>
+
+        <div className="player-list">
+          {players.map(p => {
+            const isPlayerHost = snapshot.hostPlayerId === p.id;
+            return (
+              <div key={p.id} className="lobby-player-card">
+                <div 
+                  className="lobby-player-avatar"
+                  style={{ background: p.appearance?.avatarColor || "linear-gradient(135deg, #38bdf8, #818cf8)" }}
+                >
+                  {p.name.charAt(0).toUpperCase()}
+                </div>
+                <div className="lobby-player-info">
+                  <span className="lobby-player-name">{p.name}</span>
+                  <span className="lobby-player-role">
+                    {isPlayerHost ? "Host" : "Investigator"}
+                  </span>
+                  {selfPlayer?.id === p.id && (
+                    <button 
+                      onClick={() => setShowAppearanceModal(true)}
+                      className="btn-edit-appearance"
+                    >
+                      Edit Appearance
+                    </button>
+                  )}
+                </div>
+                <div className="lobby-player-status">
+                  {p.isReady ? (
+                    <span className="badge-ready">READY</span>
+                  ) : (
+                    <span className="badge-waiting">WAITING</span>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Right Column: Setup */}
+      <div className="glass-panel lobby-setup-panel">
+        <GameSetupPanel
+          cases={availableCases}
+          selectedMode={snapshot.selectedMode}
+          selectedCase={snapshot.selectedCase ?? null}
+          phase={snapshot.phase}
+          isHost={isHost}
+          onSelectMode={onSelectMode}
+          onSelectCase={onSelectCase}
+        />
+
+        {/* Dành cho tất cả người chơi: Nút Toggle Ready */}
+        <div className="lobby-actions">
+          <button 
+            className={`btn-primary-large btn-ready ${selfPlayer?.isReady ? 'ready' : ''}`}
+            onClick={onToggleReady}
+          >
+            {selfPlayer?.isReady ? "BỎ SẴN SÀNG" : "SẴN SÀNG"}
+          </button>
+
+          {isHost && (
+            <button 
+              className="btn-primary-large btn-start"
+              disabled={!snapshot.selectedCase || players.some(p => !p.isReady)}
+              onClick={onStartBriefing}
+            >
+              Start Briefing
+            </button>
+          )}
+        </div>
+      </div>
+
+      {showAppearanceModal && (
+        <CharacterSetupModal 
+          initialAppearance={selfPlayer?.appearance}
+          onSave={onSetAppearance}
+          onClose={() => setShowAppearanceModal(false)}
+        />
+      )}
+    </div>
+  );
+}

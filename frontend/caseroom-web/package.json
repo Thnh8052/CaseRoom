@@ -11,11 +11,12 @@
   "dependencies": {
     "@microsoft/signalr": "latest",
     "@vitejs/plugin-react": "latest",
-    "vite": "latest",
-    "typescript": "latest",
+    "lucide-react": "^1.17.0",
+    "phaser": "latest",
     "react": "latest",
     "react-dom": "latest",
-    "phaser": "latest"
+    "typescript": "latest",
+    "vite": "latest"
   },
   "devDependencies": {
     "@types/react": "latest",

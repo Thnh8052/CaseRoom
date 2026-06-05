@@ -1,0 +1,1175 @@
+CASEROOM PRODUCTION PIPELINE - CONSOLIDATED
+Ngày cập nhật: 2026-05-30
+Dự án: CaseRoom
+Thể loại: Multiplayer Detective / Social Deduction / AI-assisted Investigation
+Tech stack định hướng: ASP.NET Core + SignalR + React/TypeScript + WebRTC + PostgreSQL + AI local/cloud
+
+============================================================
+0. TẦM NHÌN SẢN PHẨM
+============================================================
+
+CaseRoom là một web game multiplayer kết hợp:
+- Among Us: di chuyển phòng, chia nhóm, nghi ngờ, social deduction.
+- Ma Sói: ẩn vai trò, tranh luận, vote, lừa dối.
+- Trinh thám: điều tra manh mối thật, lời khai, puzzle, suy luận logic.
+- AI: NPC có tri thức giới hạn, internal AI riêng cho từng player, narrator, validator.
+
+Identity cốt lõi:
+
+    Người chơi thắng vì suy luận, không chỉ vì nhìn thấy ai giết ai.
+
+Điểm khác biệt của CaseRoom:
+- Không chỉ “tôi thấy người đó đi ra từ phòng này”.
+- Người chơi phải tìm clue, mở khóa object, giải puzzle, đối chiếu timeline, thẩm vấn NPC, chia sẻ hoặc giấu manh mối.
+- NPC có thể mô tả nghi phạm bằng đặc điểm nhận dạng thay vì nói tên.
+- AI không tự tạo sự thật mới; AI chỉ diễn giải thông tin được phép biết.
+
+Câu ví dụ thể hiện chất game:
+
+    NPC nói đã thấy một người cao, áo xanh, tay có vết dầu rời khỏi Kitchen lúc 9:20.
+    Người chơi tìm được khăn dính dầu trong Trash Bin.
+    Internal AI gợi ý hỏi Chef về dầu máy.
+    Người áo xanh nói mình chưa từng vào Kitchen.
+    Public board có timeline mâu thuẫn.
+    Cả nhóm phải quyết định tin ai.
+
+============================================================
+1. NGUYÊN TẮC THIẾT KẾ CỐT LÕI
+============================================================
+
+1. Backend là source of truth.
+- Frontend chỉ render state và gửi action.
+- Mọi hành động quan trọng phải được server validate.
+
+2. Fog of War.
+- Người chơi chỉ thấy người cùng phòng.
+- Không lộ toàn bộ vị trí player trên map.
+- Clue private không tự động lộ cho người khác.
+
+3. Truth Engine cố định.
+- Hung thủ, motive, method, timeline, evidence thật phải do rule/truth engine quản lý.
+- AI không được tự ý đổi hung thủ hoặc bịa clue mới.
+
+4. AI chỉ diễn giải.
+- NPC AI chỉ biết phần tri thức của NPC.
+- Internal AI chỉ biết clue/player notes/public board được phép.
+- Narrator AI kể chuyện, nhưng không thay đổi logic vụ án.
+
+5. Investigation thật, không chỉ task.
+- Object không chỉ để click nhận điểm.
+- Object là entry point vào investigation, puzzle, item, clue, hint, contradiction.
+
+6. Social deduction phải có áp lực thời gian.
+- Exploration, Discussion, Final Vote nên có timer.
+- Inspect/tamper/open object tốn thời gian.
+- Hỏi AI/NPC nên có cooldown hoặc giới hạn nhẹ.
+
+7. Evidence-based meeting.
+- Tranh luận phải dựa trên clue, witness, timeline, public board.
+- Không chỉ vote theo cảm tính.
+
+8. Production phải có replayability.
+- Không thể chỉ có case fixed một lần chơi là hết.
+- Ưu tiên Variant Case trước AI-generated case.
+
+============================================================
+2. TECH STACK ĐỊNH HƯỚNG
+============================================================
+
+Backend:
+- ASP.NET Core
+- SignalR cho realtime game state
+- SignalR làm WebRTC signaling cho voice
+- Entity Framework Core sau này
+- PostgreSQL sau này
+- ASP.NET Core Identity sau này cho account/login
+- In-memory state cho prototype V1/V1.5
+- Database-backed state cho production
+
+Frontend:
+- React + TypeScript
+- Vite
+- TailwindCSS hoặc CSS Module
+- @microsoft/signalr
+- WebRTC / getUserMedia
+- Push-to-talk bằng phím V hoặc UI button
+- Background room image thay grid
+- UI gồm lobby, map room view, notebook, public board, puzzle modal, NPC chat, internal AI panel
+
+Voice:
+- WebRTC peer-to-peer mesh cho nhóm nhỏ
+- SignalR chỉ relay Offer/Answer/ICE
+- Voice theo phòng
+- Mic xin quyền từ lúc join lobby/briefing
+- Push-to-talk same-room
+
+AI:
+- Local AI/Ollama hoặc API model sau này
+- AI roles:
+  1. Game Master / Narrator
+  2. NPC AI
+  3. Internal/private AI của từng player
+  4. Evidence analyzer
+  5. Case generator/validator sau này
+
+============================================================
+3. TRẠNG THÁI V1 CORE ĐÃ CHỐT
+============================================================
+
+V1 mục tiêu:
+- Chạy được vòng multiplayer cơ bản.
+- Chưa cần database/login/AI thật.
+- State có thể lưu in-memory.
+
+Đã chốt:
+- Join session bằng sessionId + playerName.
+- Người chơi bắt đầu ở Briefing Room.
+- GameHub quản lý join/move/interact.
+- VoiceHub tách riêng cho WebRTC signaling.
+- HubGroupNames chuẩn hóa tên group.
+- Room group theo session + room.
+- Fog of War: chỉ thấy player cùng phòng.
+- Không hiển thị toàn bộ map vị trí người chơi.
+- Chỉ render phòng hiện tại.
+- Object interaction placeholder.
+- Push-to-talk theo phòng từ lobby/briefing.
+- Khi chuyển phòng thì voice room refresh.
+- Loading/transition screen khi chuyển phòng.
+- Khi moving có thể tạm khóa interaction/PTT.
+- PlayerDto không gửi ConnectionId xuống client.
+- GameHub không nên tin playerId từ client; lấy player bằng Context.ConnectionId.
+- Voice signaling cần check same-room trước khi relay.
+
+============================================================
+4. MAP / ROOM TOPOLOGY HIỆN TẠI
+============================================================
+
+Canvas định hướng: khoảng 800x600.
+
+4 phòng hiện tại:
+
+1. Briefing Room
+- Tâm phòng: X=420, Y=120
+- Briefing Table: X=420, Y=150
+- Case Board: X=520, Y=130
+- NPC Speaker: X=320, Y=130
+- Nối với: Library, Kitchen
+
+2. Library
+- Tâm phòng: X=220, Y=330
+- Bookshelf: X=170, Y=330
+- Desk: X=250, Y=360
+- Fireplace: X=310, Y=300
+- Nối với: Briefing, Hallway
+
+3. Kitchen
+- Tâm phòng: X=610, Y=330
+- Sink: X=560, Y=340
+- Fridge: X=650, Y=300
+- Trash Bin: X=690, Y=370
+- Nối với: Briefing, Hallway
+
+4. Hallway
+- Tâm phòng: X=420, Y=500
+- Old Painting: X=370, Y=500
+- Locked Door: X=470, Y=500
+- Nối với: Library, Kitchen
+
+Visual direction:
+- Ban đầu dùng grid.
+- Đã bắt đầu chuyển sang background image theo từng room.
+- Mỗi object tương tác cần khớp vị trí tọa độ backend.
+- Không nên nhúng text/label vào ảnh nền.
+- UI overlay marker/hotspot riêng.
+
+============================================================
+5. GAME PHASE SYSTEM - V1.5.1
+============================================================
+
+GamePhase:
+- Lobby
+- Briefing
+- Exploration
+- Discussion
+- FinalVote
+- Ended
+
+Lobby:
+- Người chơi join room.
+- Mic đã bật.
+- Cùng ở Briefing Room.
+- Host chọn mode/case.
+- Chưa được tự do di chuyển.
+
+Briefing:
+- Host bấm Start Briefing.
+- Tất cả player ở Briefing Room.
+- NPC/Narrator phổ biến vụ án.
+- Vẫn dùng voice cùng phòng.
+- Chưa cho tự do khám phá.
+
+Exploration:
+- Host bấm Start Exploration.
+- Người chơi di chuyển giữa phòng.
+- Được inspect object.
+- Có investigation/puzzle/clue sau này.
+
+Discussion:
+- Giai đoạn họp/tranh luận.
+- Player có thể share clue lên public board.
+- Có accusation/counter-accusation.
+
+FinalVote:
+- Vote nghi phạm.
+- Production nên vote cả suspect/motive/method/evidence.
+
+Ended:
+- Narrator giải thích truth.
+- Hiện điểm deduction/deception.
+
+Backend cần:
+- GameSessionState.Phase
+- GameSessionState.HostPlayerId
+- GameSessionState.BriefingText
+- TryStartBriefing
+- TryStartExploration
+- Broadcast GamePhaseChanged
+- Lock move/interact nếu phase != Exploration
+
+============================================================
+6. GAME SETUP / MODE + CASE SELECTION - V1.5.2
+============================================================
+
+Đã chốt:
+- Chọn Game Mode trước.
+- Case list chỉ hiện case hỗ trợ mode đó.
+- Case list phải có dạng thu gọn/mở rộng.
+- Có search/filter vì sau này có thể có 100 cases.
+- Selected mode + selected case sync realtime cho cả session.
+- Chỉ host được đổi mode/case.
+- Chỉ đổi trong Lobby.
+- Sau Briefing thì khóa setup.
+- Backend validate case có hỗ trợ selected mode.
+
+GameMode:
+- NpcMurderer
+- PlayerMurderer
+- EveryoneHasSecrets
+
+CaseSummary:
+- id
+- title
+- summary
+- difficulty
+- estimatedMinutes
+- briefingText
+- supportedModes
+
+UI:
+- GameSetupPanel
+  - ModeSelector
+  - CollapsibleCaseList
+
+CollapsibleCaseList:
+- Collapsed: hiện selected case.
+- Expanded: search input + list case compatible.
+- Có selected badge.
+- Non-host chỉ xem.
+- Host edit được khi phase = Lobby.
+
+Event:
+- GameSetupChanged
+
+Definition of Done:
+1. Host join trước.
+2. Non-host join sau.
+3. Host chọn mode.
+4. Case list filter theo mode.
+5. Host chọn case.
+6. Non-host thấy cập nhật realtime.
+7. Non-host không chỉnh được.
+8. Nếu đổi mode làm case cũ không hợp lệ, server tự chọn case compatible.
+9. Start Briefing dùng đúng briefingText của selected case.
+10. Sau Briefing, mode/case bị khóa.
+
+============================================================
+7. VARIANT CASE - REPLAYABILITY CHO PRODUCTION
+============================================================
+
+Đã chốt:
+- Production nên dùng Variant Case trước.
+- Chưa cần AI-generated case ngay.
+
+Lý do:
+- Fixed Case chơi một lần là biết lời giải.
+- AI-generated case khó kiểm soát fairness nếu làm quá sớm.
+- Variant Case cho replayability nhưng vẫn giữ kiểm soát chất lượng.
+
+Ví dụ:
+
+Case: Blackwood Manor
+
+Variant A:
+- Murderer: Butler
+- Method: Letter opener
+- Motive: Inheritance
+- Key evidence: Fireplace ash
+- False lead: Broken window
+
+Variant B:
+- Murderer: Niece
+- Method: Poison
+- Motive: Debt
+- Key evidence: Teacup residue
+- False lead: Footprint near garden
+
+Variant C:
+- Murderer: Doctor
+- Method: Overdose
+- Motive: Cover-up
+- Key evidence: Medical bag
+- False lead: Locked study door
+
+Data model production:
+- CaseDefinition
+- CaseVariant
+- TruthGraph
+- EvidenceGraph
+- NPCKnowledgeGraph
+- PuzzleGraph
+- Room/Object layout
+
+Rule:
+- Một case có thể có nhiều variant.
+- Variant quyết định truth.
+- Map/room/object có thể giữ nguyên.
+- Clue/puzzle/NPC lời khai thay đổi theo variant.
+
+============================================================
+8. INVESTIGATION THẬT, KHÔNG CHỈ TASK
+============================================================
+
+Đã chốt:
+- Người chơi thắng nhờ suy luận.
+- Object interaction phải là investigation thật.
+- Clue/hint có thể liên hệ với nhau.
+- Có item-gated clue/puzzle.
+
+Flow cơ bản:
+1. Player click object.
+2. Backend kiểm tra phase = Exploration.
+3. Start investigating action.
+4. Progress bar 3-8 giây.
+5. Người cùng phòng thấy player đang inspect object.
+6. Sau progress:
+   - nhận clue trực tiếp, hoặc
+   - mở puzzle/quiz, hoặc
+   - nhận item, hoặc
+   - biết object bị locked/cần item khác.
+7. Giải puzzle hoặc dùng item đúng.
+8. Unlock clue/hint.
+9. Clue lưu vào private notebook.
+10. Player có thể share lên public board hoặc hỏi Internal AI.
+
+Ví dụ clue liên kết / item-gated:
+
+    Player tìm được "Rusty Key" ngoài sân/Garden.
+    Key này không phải clue suy luận, mà là Item.
+    Player dùng Rusty Key để mở safe/két trong Bedroom.
+    Safe mở ra puzzle code-lock.
+    Giải puzzle xong mới nhận được clue: "Burned Letter Fragment".
+    Burned Letter liên hệ với clue khác ở Fireplace.
+    Internal AI có thể gợi ý:
+    "Mảnh thư cháy này có thể liên quan đến tro trong lò sưởi. Hãy kiểm tra Fireplace hoặc hỏi Butler."
+
+Quan trọng:
+- Phân biệt Clue và Item.
+
+Clue:
+- thông tin để đọc, phân tích, hỏi AI, share board.
+
+Item:
+- vật phẩm dùng để mở khóa/tương tác object khác.
+- ví dụ: key, card, screwdriver, matchbox, torn map piece.
+
+Object có thể có:
+- Direct clue
+- Puzzle
+- Locked by item
+- Requires previous clue
+- Gives item
+- Gives hint only
+- Red herring
+- Tampered state
+
+============================================================
+9. OBJECT STATE + INVENTORY
+============================================================
+
+Production cần object state.
+
+ObjectState ví dụ:
+- Locked
+- Opened
+- Searched
+- Tampered
+- Broken
+- Empty
+- HiddenCompartmentFound
+
+Ví dụ:
+- LockedDoor state = Locked
+- Nếu dùng RustyKey -> state = Opened
+- Nếu opened thì tất cả người cùng session thấy door mở
+
+Inventory:
+- Mỗi player có inventory riêng.
+- Item có thể private hoặc public.
+- Một số item dùng một lần.
+- Một số item có thể share/trade/drop sau này.
+
+Nên phân biệt:
+- Clue Notebook
+- Inventory Bag
+
+Notebook:
+- đọc clue, hỏi AI, share public board.
+
+Inventory:
+- dùng item lên object.
+- mở khóa puzzle/object/path.
+
+============================================================
+10. PUZZLE / QUIZ SYSTEM
+============================================================
+
+Puzzle không phải lúc nào cũng có.
+Một số object chỉ inspect là nhận clue.
+Một số object cần puzzle.
+
+Puzzle types:
+- MultipleChoice
+- CodeLock
+- SequenceOrdering
+- ContradictionCheck
+- ObservationQuiz
+- PatternMatch
+- ItemCombination
+
+MVP nên làm:
+1. MultipleChoice
+2. CodeLock
+3. UseItem
+
+MultipleChoice ví dụ:
+Question:
+Which timeline detail seems inconsistent?
+
+A. The storm started before dinner
+B. The victim was seen in two places within five minutes
+C. The kitchen window was open
+D. The maid cleaned the hallway
+
+Correct: B
+
+Unlocked clue:
+The victim's last known location is inconsistent. Someone may have moved or impersonated him.
+
+CodeLock ví dụ:
+- Safe cần mã 4 số.
+- Mã được suy ra từ 2 clue khác.
+- Nếu nhập đúng: mở safe.
+- Nếu nhập sai: cooldown hoặc lockout nhẹ.
+
+Puzzle Sync:
+- Nếu puzzle là object world-state, khi player A giải xong thì object state thay đổi cho mọi người.
+- Nếu puzzle là private deduction, chỉ player A nhận clue riêng.
+
+============================================================
+11. INTERNAL / PRIVATE AI
+============================================================
+
+Internal AI là trợ lý suy luận riêng của từng player.
+
+Được phép:
+- đọc briefing public
+- đọc clue player đã unlock
+- đọc public board
+- đọc private notes của player
+- gợi ý NPC cần hỏi
+- gợi ý object cần kiểm tra
+- giải thích mối liên hệ giữa clue đã có
+
+Không được:
+- tự bịa clue
+- tiết lộ hidden truth
+- nói hung thủ nếu player chưa đủ evidence
+- dùng thông tin của player khác nếu chưa public
+
+Prompt principle:
+You are the player's private deduction assistant.
+You can only use:
+- public case briefing
+- clues unlocked by this player
+- public board clues
+- player's private notes
+Do not reveal hidden truth.
+Do not invent new evidence.
+Only suggest next investigative steps.
+
+Ví dụ:
+Player hỏi:
+"Chiếc chìa khóa rỉ này nên dùng ở đâu?"
+
+Internal AI:
+"Chìa khóa này có vẻ cũ và thuộc loại ổ cơ. Hãy thử với các object có trạng thái locked như Locked Door hoặc Safe. Nếu có clue nói về Bedroom, hãy ưu tiên kiểm tra safe trong Bedroom."
+
+============================================================
+12. MEETING SYSTEM VỚI EVIDENCE
+============================================================
+
+Đã chốt:
+- Meeting giống social deduction nhưng phải có evidence.
+- Không chỉ vote bằng cảm tính.
+
+Discussion phase:
+- Người chơi bị kéo về Briefing/Meeting Room.
+- Voice same-room hoạt động.
+- Public board hiện clue đã share.
+- Player có thể pin clue.
+- Player có thể accuse.
+- Player khác counter bằng clue khác.
+
+Accusation nên gồm:
+- suspect
+- motive
+- method
+- supporting evidence
+
+Ví dụ:
+Player accuse:
+- Suspect: Butler
+- Motive: Inheritance
+- Method: Letter opener
+- Evidence: Ash from fireplace + inconsistent alibi
+
+Counter:
+- Niece có clue chứng minh Butler ở Kitchen lúc đó.
+- Nhưng clue khác cho thấy Butler nói dối về chìa khóa.
+
+Meeting UI:
+- Evidence Board
+- Timeline view
+- Accusation panel
+- Vote panel
+- Chat/voice state
+- AI summary optional sau này
+
+============================================================
+13. ACCUSATION QUALITY SCORING
+============================================================
+
+Đã chốt:
+- Có scoring để match không chỉ thắng/thua.
+- Scoring giúp production có replay value.
+
+Ending classification:
+- Perfect Solve:
+  đúng murderer + motive + method + key evidence.
+- Strong Solve:
+  đúng murderer + method, thiếu motive.
+- Partial Solve:
+  đúng murderer nhưng sai motive/method.
+- False Conviction:
+  vote sai người.
+- Murderer Escape:
+  hết giờ / vote sai / evidence bị làm lệch.
+- Unresolved:
+  không đủ vote hoặc case bị bỏ dở.
+
+Score đề xuất:
+- Deduction Score
+- Evidence Found
+- Key Evidence Found
+- Puzzle Solved
+- Contradictions Found
+- Public Board Contribution
+- Team Trust
+- Murderer Deception Score
+- Time Efficiency
+
+Production benefit:
+- Match có recap.
+- Player thấy mình làm tốt/chưa tốt ở đâu.
+- Có XP/cosmetic/unlock sau này.
+
+============================================================
+14. ROLE NHẸ BAN ĐẦU
+============================================================
+
+Đã chốt:
+- Có thể thử role đơn giản trước.
+- Không thêm quá nhiều role ngay.
+- Role không nên phá logic trinh thám.
+
+Role MVP đề xuất:
+
+1. Detective
+- Có thể pin thêm clue vào board.
+- Internal AI gợi ý tốt hơn một chút.
+- Không biết truth.
+
+2. Archivist
+- Notebook mạnh hơn.
+- Có thể organize clue/timeline tốt hơn.
+- Có thể xem lịch sử public board rõ hơn.
+
+3. Technician
+- Giải CodeLock/UseItem thuận lợi hơn.
+- Có thể inspect object locked nhanh hơn.
+- Không tự mở được mọi thứ.
+
+4. Empath
+- Khi hỏi NPC có thể nhận emotional hint.
+- Ví dụ: NPC đang sợ, nói dối, do dự.
+- Không biến thành máy phát hiện nói dối tuyệt đối.
+
+5. Murderer
+- Chỉ có trong PlayerMurderer/EveryoneHasSecrets.
+- Có private objective.
+- Có thể hide/tamper evidence theo rule.
+- Có thể fake investigation.
+
+Rule:
+- Role chỉ tạo khác biệt nhẹ.
+- Không có role nào phá case hoặc biết lời giải ngay.
+- Ưu tiên skill/suy luận hơn ability mạnh.
+
+============================================================
+15. SUSPICION / TRUST SYSTEM
+============================================================
+
+Đã chốt:
+- Nên có suspicion/trust.
+- Dùng cho NPC/player interaction và social deduction.
+
+Suspicion có thể tăng khi:
+- bị thấy gần crime scene
+- bị thấy rời khỏi room lúc quan trọng
+- lời khai mâu thuẫn với clue
+- bị player accuse
+- bị NPC nghi ngờ
+- bị phát hiện tamper object
+- giữ clue quan trọng nhưng không share
+
+Trust có thể tăng khi:
+- share clue hữu ích
+- hỏi đúng NPC
+- giúp mở object
+- lời khai khớp evidence
+- được NPC tin
+- giải puzzle có ích cho nhóm
+
+NPC dùng trust/suspicion:
+- NPC tin ai hơn thì tiết lộ nhiều hơn.
+- NPC nghi ai thì né tránh hoặc nói vòng vo.
+- NPC sợ murderer thì có thể giấu thông tin.
+
+Không nên hiển thị tất cả chỉ số công khai.
+Có thể dùng:
+- internal hidden score
+- UI hint nhẹ
+- dialogue tone
+
+Ví dụ:
+NPC với trust thấp:
+"Tôi không chắc có nên nói với anh không."
+
+NPC với trust cao:
+"Được rồi... tôi đã giấu chuyện này, nhưng anh có vẻ thật sự đang điều tra."
+
+============================================================
+16. WITNESS MEMORY SYSTEM
+============================================================
+
+Đã chốt:
+- Nên có witness memory.
+- NPC có thể mô tả người chơi bằng đặc điểm thay vì tên.
+- Đây là feature rất riêng của CaseRoom.
+
+Player Appearance:
+- height: Short / Medium / Tall
+- build: Slim / Average / Heavy
+- hairColor: Black / Brown / Blonde / Red / Gray
+- hairStyle: Short / Long / Ponytail / Bald
+- outfitColor: Dark / Light / Red / Blue / Green
+- accessory: Glasses / Hat / Scarf / None
+
+Temporary Visual State:
+- đang cầm vật gì
+- có vết bẩn/dầu/máu/bụi
+- áo bị ướt
+- đang bị thương
+- vừa chạy
+- có disguise/mũ/áo khoác
+
+WitnessObservation:
+- npcId
+- roomId
+- observedPlayerId
+- time
+- action
+- rememberedTraits
+- confidence
+- lighting
+- distance
+- fearLevel
+
+WitnessConfidence:
+- Low
+- Medium
+- High
+
+Low:
+"Tôi chỉ thấy một người cao mặc đồ tối màu."
+
+Medium:
+"Tôi nghĩ đó là người cao, tóc đen, mặc đồ tối."
+
+High:
+"Tôi khá chắc đó là người cao, tóc đen, có kính."
+
+Rule:
+- NPC không luôn nhận diện chính xác.
+- Nếu ánh sáng kém/khoảng cách xa/NPC hoảng loạn thì chỉ nhớ vài trait.
+- Nếu NPC quen player hoặc đứng gần thì có thể nói tên.
+- Tránh dùng trait nhạy cảm ngoài đời thật.
+- Dùng từ trung tính: Slim/Average/Heavy hoặc Mảnh/Trung bình/To con.
+
+============================================================
+17. TIME PRESSURE
+============================================================
+
+Đã chốt:
+- Social deduction phải có áp lực thời gian.
+
+Timer đề xuất:
+- Lobby: không giới hạn hoặc host controlled.
+- Briefing: 60-120s hoặc skip khi host ready.
+- Exploration Round: 8-12 phút.
+- Discussion: 2-4 phút.
+- Final Vote: 60-90s.
+- Puzzle solve: 30-90s tùy puzzle.
+- Inspect action: 3-8s.
+- Tamper action: 3-5s.
+- AI/NPC question cooldown: 5-15s hoặc token/rate limit.
+
+Mục tiêu:
+- Player phải quyết định ưu tiên.
+- Murderer có cơ hội hành động.
+- Không biến game thành đọc tài liệu quá lâu.
+- Meeting có nhịp căng thẳng.
+
+============================================================
+18. GAME MODES
+============================================================
+
+1. NPC Murderer
+- Mode đơn giản nhất.
+- Tất cả player hợp tác tìm NPC murderer.
+- Phù hợp mode playable đầu tiên.
+- Tập trung investigation + NPC witness + final accusation.
+
+2. Player Murderer
+- Một player là murderer.
+- Murderer có private objective.
+- Có thể hide/tamper evidence theo rule.
+- Có thể fake investigation.
+- Không được hành động random; phải có điều kiện.
+- NPC vẫn tồn tại.
+
+3. Everyone Has Secrets
+- Một player là murderer.
+- Người khác cũng có secret/private objective.
+- Mọi người có động cơ che giấu.
+- Social deduction mạnh nhất.
+- Là mode nên làm sau cùng.
+
+============================================================
+19. MURDERER ACTIONS / TAMPER SYSTEM
+============================================================
+
+Chưa làm ngay, nhưng production cần.
+
+Murderer có thể:
+- Hide evidence
+- Tamper evidence
+- Plant false clue
+- Fake investigation
+- Mislead NPC
+- Lock/unlock path
+- Delay group progress
+- Kill/eliminate trong một số mode nếu đủ điều kiện
+
+Rule:
+- Không instant mọi thứ.
+- Hide/tamper có progress bar.
+- Bị interrupt nếu có witness hoặc người vào phòng.
+- Không destroy core evidence dễ dàng.
+- Tamper để lại trace.
+- Có cooldown.
+- Có điều kiện theo phase/room/object.
+
+Ví dụ:
+Hide evidence:
+- cần đứng tại object chứa evidence
+- phase = Exploration
+- không có witness trực tiếp
+- mất 3s
+- nếu bị interrupt, để lại trace "disturbed drawer"
+
+============================================================
+20. SPECTATOR / GHOST GAMEPLAY
+============================================================
+
+Quyết định hiện tại:
+- Bỏ qua / chưa ưu tiên.
+
+Lý do:
+- Tăng scope.
+- Hiện tại nên tập trung investigation, evidence, puzzle, NPC, AI và meeting.
+- Khi production có eliminate/death thật thì có thể revisit sau.
+
+Trạng thái:
+- Deferred, not in core roadmap now.
+
+============================================================
+21. CASE AUTHORING TOOL
+============================================================
+
+Đã chốt:
+- Nên có về dài hạn.
+- Đây là chìa khóa để production có nhiều content.
+
+Mục tiêu:
+- Không hardcode case mãi.
+- Cho phép tạo case bằng editor.
+- Sau này có thể có community workshop hoặc admin-created cases.
+
+Case Authoring MVP:
+- Upload map/background.
+- Vẽ hotspot object.
+- Tạo room.
+- Tạo connection giữa room.
+- Tạo object state.
+- Tạo clue.
+- Tạo item.
+- Tạo puzzle.
+- Link object -> puzzle/item/clue.
+- Tạo NPC.
+- Tạo NPC knowledge.
+- Tạo truth graph.
+- Tạo case variant.
+- Test play.
+
+AI Validator:
+- Kiểm tra case có giải được không.
+- Check clue chain có bị đứt không.
+- Check có plot hole không.
+- Check có đường suy luận hợp lý không.
+- Check evidence không mâu thuẫn truth.
+
+Moderation:
+- Giai đoạn 1: Admin only.
+- Giai đoạn 2: community submitted cases.
+- Draft -> Review -> Needs Fix -> Approved -> Published -> Archived.
+
+============================================================
+22. PRODUCTION SYSTEMS BẮT BUỘC
+============================================================
+
+Cần trước public demo lớn:
+
+1. Reconnect ổn định
+- Refresh tab quay lại đúng session/player/room.
+- Voice reconnect.
+
+2. Session cleanup
+- Xóa session khỏi RAM nếu không còn player sau 15 phút.
+
+3. Host migration
+- Host rời phòng thì chuyển host cho player khác.
+
+4. Server-side validation
+- Move, inspect, unlock clue, vote, kill, item use đều server check.
+
+5. AI rate limit
+- Chống spam token/API.
+
+6. Moderation/report/block
+- Vì có voice/chat/user-generated content.
+
+7. Lobby settings
+- số người chơi
+- mode
+- timer
+- voice on/off
+- AI difficulty
+- private/public room
+
+8. Save/replay logs
+- Lưu event log để debug.
+- Có thể dùng làm post-match recap.
+
+9. Observability
+- Log hub errors.
+- Log disconnect.
+- Log AI request.
+- Log latency.
+
+10. Database
+- PostgreSQL.
+- EF Core.
+- Identity.
+- Save game.
+- Case catalog.
+
+============================================================
+23. MATCH LOOP PRODUCTION ĐỀ XUẤT
+============================================================
+
+1. Lobby
+- Join room.
+- Chọn character appearance.
+- Test mic.
+- Chọn mode/case/variant.
+- Ready.
+
+2. Briefing
+- Narrator/NPC giới thiệu vụ án.
+- Public objective.
+- Case rules.
+- Voice trong Briefing Room.
+
+3. Exploration Round 1
+- Split rooms.
+- Inspect object.
+- Puzzle.
+- Unlock clue/item.
+- Hỏi NPC.
+- Murderer có thể fake/tamper nhẹ.
+
+4. Discussion 1
+- Quay về meeting room.
+- Share clue lên public board.
+- Accuse/counter-accuse.
+- Có thể chưa vote cuối.
+
+5. Exploration Round 2
+- Mở object mới bằng item/clue.
+- NPC đổi lời khai nếu bị confront.
+- More pressure.
+
+6. Final Discussion
+- Public board tổng hợp.
+- Timeline view.
+- Mỗi người đưa lập luận.
+
+7. Final Vote
+- Vote suspect/motive/method/evidence.
+
+8. Ending
+- Narrator giải thích truth.
+- Score.
+- XP/cosmetic/stats sau này.
+
+============================================================
+24. ROADMAP CẬP NHẬT
+============================================================
+
+V1 - Core Multiplayer
+- Join session
+- Same-room visibility
+- Room movement
+- Object interaction placeholder
+- Push-to-talk voice
+- Room transition/loading
+- Refactor hooks/hubs/store
+
+V1.5.1 - Game Phase System
+- Lobby
+- Briefing
+- Exploration
+- Discussion
+- FinalVote
+- Ended
+- Host start briefing/exploration
+- Lock move/interact before Exploration
+
+V1.5.2 - Game Setup
+- Mode selector
+- Case catalog hardcode
+- Supported modes per case
+- Collapsible/searchable case list
+- Selected mode/case sync realtime
+- Backend validate host/phase/mode compatibility
+
+V1.5.3 - Ready System
+- Player ready state
+- Host start only when ready
+- UI ready list
+
+V1.6 - Character Setup Basic
+- Avatar color
+- Outfit color
+- Hair color
+- Accessory
+- Height/build simple choices
+- Later used by witness memory
+
+V2.1 - Object State + Inventory Foundation
+- Object states
+- Inventory system
+- Distinguish clue vs item
+- Use item on object
+
+V2.2 - Investigation Action
+- Inspect object with progress bar
+- Same-room players see action
+- Cancel/interrupt action
+
+V2.3 - Puzzle/Quiz System
+- Multiple choice puzzle
+- Code lock puzzle
+- Puzzle tied to object
+- Puzzle sync for world objects
+
+V2.4 - Clue Unlock + Notebook/Public Board
+- Private clue unlock
+- Private notebook
+- Share clue to public board
+- Evidence board in discussion
+
+V2.5 - Internal AI
+- Ask AI about unlocked clue
+- AI suggests next steps
+- AI cannot invent/reveal hidden truth
+
+V2.6 - NPC Witness/Perception
+- NPC observations
+- Remembered traits
+- Confidence levels
+- NPC describes player by appearance/state
+
+V2.7 - Trust/Suspicion
+- Hidden trust/suspicion scoring
+- NPC dialogue changes based on trust/suspicion
+- Accusation affects suspicion
+
+V3.1 - NPC Murderer Mode
+- Full NPC murderer case
+- Players identify NPC murderer
+- Final accusation
+- Accusation quality scoring
+- Ending narrator
+
+V3.2 - Player Murderer Mode
+- Assign one player as murderer
+- Murderer private objective
+- Tamper/hide evidence
+- Rule-based action constraints
+- Suspicion/witness system becomes important
+
+V3.3 - Everyone Has Secrets
+- One murderer
+- Everyone has private secret/objective
+- Strong private AI per player
+- Social deduction focus
+
+V4 - Production Infrastructure
+- PostgreSQL
+- EF Core
+- Identity login/register
+- Save game
+- Reconnect
+- Host migration
+- Session cleanup
+- Logging/observability
+- AI rate limiting
+
+V5 - Case Authoring / Moderation / Variant Cases
+- Case editor
+- Hotspot editor
+- Truth graph editor
+- Variant case support
+- AI validator
+- Moderation workflow
+- Published case catalog
+
+============================================================
+25. DEFERRED / KHÔNG ƯU TIÊN HIỆN TẠI
+============================================================
+
+1. Spectator/Ghost gameplay
+- Bỏ qua hiện tại.
+- Revisit nếu Player Murderer có eliminate/death khiến người chơi bị loại sớm.
+
+2. Quá nhiều role
+- Không làm hệ thống role phức tạp kiểu 30 role ngay.
+- Chỉ role nhẹ trước.
+
+3. AI-generated cases hoàn toàn tự động
+- Chưa làm sớm.
+- Ưu tiên Variant Case + authoring/validator trước.
+
+4. Full 2D movement physics
+- Có thể làm sau.
+- Hiện tại dùng room/object hotspot + avatar position là đủ.
+
+5. Cosmetics/monetization
+- Chưa ưu tiên.
+- Chỉ nghĩ sau khi core game loop vui.
+
+============================================================
+26. NEXT STEP NGAY BÂY GIỜ
+============================================================
+
+Ưu tiên gần nhất:
+
+1. Hoàn thiện V1.5.2 Game Setup:
+- Mode selector.
+- Collapsible/searchable case list.
+- Selected mode/case realtime sync.
+- Backend validation.
+
+2. Sau đó làm Ready System:
+- Player ready state.
+- Host start briefing khi đủ ready.
+
+3. Sau Ready làm Character Setup Basic:
+- outfit color
+- hair color
+- accessory
+- height/build
+
+4. Sau đó vào V2:
+- ObjectState
+- Inventory
+- Investigation progress
+- Puzzle/quiz
+- Clue unlock
+- Notebook/Public board
+
+Kết luận:
+CaseRoom nên đi theo hướng:
+    Evidence-driven social deduction
+    + fixed truth engine
+    + variant case replayability
+    + AI as limited-knowledge interpreter
+    + witness ambiguity
+    + time pressure
+    + accusation quality scoring.
+
+============================================================
+END OF CASEROOM PRODUCTION PIPELINE
+============================================================

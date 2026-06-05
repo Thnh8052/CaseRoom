@@ -4,7 +4,9 @@ using CaseRoom.Api.Services;
 var builder = WebApplication.CreateBuilder(args);
 builder.WebHost.UseUrls("http://localhost:5050");
 
+builder.Services.AddHttpClient();
 builder.Services.AddSingleton<GameStateStore>();
+builder.Services.AddSingleton<DeepSeekAiService>();
 builder.Services.AddSignalR();
 builder.Services.AddCors(options =>
 {

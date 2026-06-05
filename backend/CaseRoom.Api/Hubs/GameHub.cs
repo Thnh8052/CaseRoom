@@ -9,15 +9,15 @@ namespace CaseRoom.Api.Hubs;
 /// Quản lý dữ liệu JSON nhẹ (trạng thái phòng, toạ độ, di chuyển).
 /// Tách rời khỏi VoiceHub để đảm bảo luồng Game luôn mượt mà kể cả khi mạng đàm thoại bị lag.
 /// </summary>
-public sealed class GameHub(GameStateStore store) : Hub
+public sealed class GameHub(GameStateStore store, DeepSeekAiService aiService) : Hub
 {
     /// <summary>
     /// Được gọi khi người chơi bấm nút Join.
     /// Khởi tạo dữ liệu người chơi và đưa vào các nhóm Broadcast phù hợp.
     /// </summary>
-    public async Task<object> JoinSession(string sessionId, string playerName)
+    public async Task<object> JoinSession(string sessionId, string playerId, string playerName)
     {
-        var player = store.AddOrUpdatePlayer(sessionId, playerName, Context.ConnectionId);
+        var player = store.AddOrUpdatePlayer(sessionId, playerId, playerName, Context.ConnectionId);
         var normalizedSessionId = store.GetOrCreateSession(sessionId).Id;
 
         // Đưa người chơi vào nhóm của toàn Session
@@ -31,9 +31,32 @@ public sealed class GameHub(GameStateStore store) : Hub
         // Trả về Snapshot tuân thủ Fog of War (Chỉ thấy những người cùng phòng)
         return new
         {
-            player = player.ToDto(),
+            player = player.ToDto(player.Id),
             snapshot = store.GetVisibleSnapshotForPlayer(normalizedSessionId, player.Id)
         };
+    }
+
+    /// <summary>
+    /// Stream câu trả lời của AI theo thời gian thực về Client.
+    /// </summary>
+    public async IAsyncEnumerable<string> StreamAskDetectiveAi(string question, [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        var conn = store.GetGameConnection(Context.ConnectionId);
+        if (conn == null) yield break;
+
+        var player = store.GetCallerPlayer(Context.ConnectionId);
+        if (player == null) yield break;
+
+        var session = store.GetOrCreateSession(conn.Value.SessionId);
+
+        var clues = player.UnlockedClues;
+
+        var responseStream = aiService.StreamAskDetectiveAiAsync(question, session.BriefingText, session.SelectedCase?.SecretSolution ?? "", clues, cancellationToken);
+        
+        await foreach (var chunk in responseStream)
+        {
+            yield return chunk;
+        }
     }
 
     /// <summary>
@@ -62,6 +85,9 @@ public sealed class GameHub(GameStateStore store) : Hub
 
         await Clients.Group(HubGroupNames.GameGroup(conn.Value.SessionId))
             .SendAsync("GameSetupChanged", setupInfo);
+
+        // Phát Broadcast cho phòng briefing để mọi người thấy Ready state bị reset
+        await BroadcastRoomOccupants(conn.Value.SessionId, "briefing");
     }
 
     /// <summary>
@@ -81,6 +107,9 @@ public sealed class GameHub(GameStateStore store) : Hub
         // Báo cho toàn bộ Session biết Case/Setup đã được thay đổi
         await Clients.Group(HubGroupNames.GameGroup(conn.Value.SessionId))
             .SendAsync("GameSetupChanged", setupInfo);
+
+        // Phát Broadcast để update lại danh sách player (Ready state reset)
+        await BroadcastRoomOccupants(conn.Value.SessionId, "briefing");
     }
 
     /// <summary>
@@ -92,6 +121,39 @@ public sealed class GameHub(GameStateStore store) : Hub
         if (conn == null) return null;
 
         return store.GetVisibleSnapshotForPlayer(conn.Value.SessionId, conn.Value.PlayerId);
+    }
+
+    /// <summary>
+    /// Bật/tắt trạng thái Sẵn sàng của người chơi trong Lobby.
+    /// </summary>
+    public async Task ToggleReady()
+    {
+        var conn = store.GetGameConnection(Context.ConnectionId);
+        if (conn == null) return;
+
+        if (!store.TryToggleReady(conn.Value.SessionId, conn.Value.PlayerId, out var isReady, out var error))
+        {
+            await Clients.Caller.SendAsync("GameError", error);
+            return;
+        }
+
+        // Cập nhật lại danh sách player trong Lobby (mặc định ở briefing room)
+        await BroadcastRoomOccupants(conn.Value.SessionId, "briefing");
+    }
+
+    public async Task SetAppearance(CharacterAppearance appearance)
+    {
+        var conn = store.GetGameConnection(Context.ConnectionId);
+        if (conn == null) return;
+
+        if (!store.TrySetAppearance(conn.Value.SessionId, conn.Value.PlayerId, appearance, out var error))
+        {
+            await Clients.Caller.SendAsync("GameError", error);
+            return;
+        }
+
+        // Báo cho mọi người trong phòng biết ngoại hình đã thay đổi
+        await BroadcastRoomOccupants(conn.Value.SessionId, store.GetOrCreateSession(conn.Value.SessionId).Players[conn.Value.PlayerId].CurrentRoomId);
     }
 
     /// <summary>
@@ -154,6 +216,79 @@ public sealed class GameHub(GameStateStore store) : Hub
         // Thông báo cho những người cùng phòng thấy bạn vừa thao tác
         await BroadcastRoomOccupants(normalizedSessionId, roomId!);
     }
+
+    /// <summary>
+    /// Hoàn thành quá trình khám xét đồ vật (sau khi chạy xong Progress Bar).
+    /// </summary>
+    public async Task CompleteInspection(string objectId)
+    {
+        var conn = store.GetGameConnection(Context.ConnectionId);
+        if (conn == null) return;
+        var normalizedSessionId = conn.Value.SessionId;
+
+        if (!store.TryCompleteInspection(normalizedSessionId, conn.Value.PlayerId, objectId, out var result, out var unlockedClue, out var error))
+        {
+            await Clients.Caller.SendAsync("GameError", error);
+            return;
+        }
+
+    // Tạm thời chỉ gửi lại kết quả khám xét dạng Text cho người gọi
+    await Clients.Caller.SendAsync("ReceiveInspectionResult", new { objectId, result });
+    
+    // Nếu có clue mới, báo cho Client biết (kèm theo Snapshot mới để đồng bộ Sổ tay)
+    if (unlockedClue != null)
+    {
+        await Clients.Caller.SendAsync("ClueUnlocked", unlockedClue);
+        
+        var session = store.GetOrCreateSession(normalizedSessionId);
+        var snapshot = session.ToSnapshotForPlayer(conn.Value.PlayerId);
+        await Clients.Caller.SendAsync("GameSnapshot", snapshot);
+    }
+
+    var player = store.GetCallerPlayer(Context.ConnectionId);
+    if (player?.CurrentRoomId != null)
+    {
+        await Clients.Group(HubGroupNames.RoomGroup(normalizedSessionId, player.CurrentRoomId))
+            .SendAsync("PlayerCancelledInspection", conn.Value.PlayerId);
+    }
+}
+
+public async Task TamperClue(string clueId, string fakeText)
+{
+    var conn = store.GetGameConnection(Context.ConnectionId);
+    if (conn == null) return;
+    var normalizedSessionId = conn.Value.SessionId;
+
+    if (!store.TryTamperClue(normalizedSessionId, conn.Value.PlayerId, clueId, fakeText, out var error))
+    {
+        await Clients.Caller.SendAsync("GameError", error);
+        return;
+    }
+
+    var session = store.GetOrCreateSession(normalizedSessionId);
+    var snapshot = session.ToSnapshotForPlayer(conn.Value.PlayerId);
+    await Clients.Caller.SendAsync("GameSnapshot", snapshot);
+}
+
+public async Task StartInspection(string objectId)
+{
+    var conn = store.GetGameConnection(Context.ConnectionId);
+    var player = store.GetCallerPlayer(Context.ConnectionId);
+    if (conn == null || player?.CurrentRoomId == null) return;
+
+    await Clients.Group(HubGroupNames.RoomGroup(conn.Value.SessionId, player.CurrentRoomId))
+        .SendAsync("PlayerStartedInspection", conn.Value.PlayerId, objectId);
+}
+
+public async Task CancelInspection()
+{
+    var conn = store.GetGameConnection(Context.ConnectionId);
+    var player = store.GetCallerPlayer(Context.ConnectionId);
+    if (conn == null || player?.CurrentRoomId == null) return;
+
+    await Clients.Group(HubGroupNames.RoomGroup(conn.Value.SessionId, player.CurrentRoomId))
+        .SendAsync("PlayerCancelledInspection", conn.Value.PlayerId);
+}
 
     /// <summary>
     /// Xử lý khi người chơi đột ngột rớt mạng (Tắt tab, mất internet).
@@ -261,5 +396,13 @@ public sealed class GameHub(GameStateStore store) : Hub
 
         await Clients.Group(HubGroupNames.GameGroup(conn.Value.SessionId))
             .SendAsync("GamePhaseChanged", phaseInfo);
+
+        // Gửi Snapshot mới (chứa Role) cho từng người chơi vì áp dụng Fog of War
+        var session = store.GetOrCreateSession(conn.Value.SessionId);
+        foreach (var p in session.Players.Values)
+        {
+            var snapshot = session.ToSnapshotForPlayer(p.Id);
+            await Clients.Client(p.ConnectionId).SendAsync("GameSnapshot", snapshot);
+        }
     }
 }

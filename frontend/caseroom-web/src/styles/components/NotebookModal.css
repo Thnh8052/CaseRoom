@@ -1,0 +1,281 @@
+.notebook-modal-container {
+  width: 700px;
+  max-width: 90vw;
+  height: 80vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.notebook-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.notebook-modal-title {
+  margin: 0;
+  color: #f8fafc;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.notebook-close-btn {
+  background: transparent;
+  border: none;
+  color: #94a3b8;
+  font-size: 1.5rem;
+  cursor: pointer;
+}
+
+.notebook-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  padding-bottom: 8px;
+}
+
+.notebook-tab-btn {
+  background: transparent;
+  color: #94a3b8;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: bold;
+}
+
+.notebook-tab-btn.active {
+  background: rgba(56, 189, 248, 0.2);
+  color: #38bdf8;
+}
+
+.notebook-content {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.notebook-empty-state {
+  text-align: center;
+  color: #94a3b8;
+  padding: 40px 0;
+  margin: auto;
+}
+
+.notebook-empty-icon {
+  font-size: 3rem;
+  margin: 0 0 16px 0;
+  opacity: 0.5;
+}
+
+.notebook-empty-text {
+  font-size: 0.85rem;
+}
+
+.clue-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding-right: 8px;
+}
+
+.clue-card {
+  background: rgba(30, 41, 59, 0.6);
+  border: 1px solid rgba(56, 189, 248, 0.3);
+  border-radius: 12px;
+  padding: 16px;
+  position: relative;
+}
+
+.clue-badge {
+  position: absolute;
+  top: -10px;
+  right: 16px;
+  background: #0f172a;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  color: #38bdf8;
+  border: 1px solid rgba(56, 189, 248, 0.3);
+}
+
+.clue-title {
+  margin: 0 0 8px 0;
+  color: #e0f2fe;
+  font-size: 1.1rem;
+}
+
+.clue-tamper-container {
+  margin-top: 8px;
+}
+
+.clue-tamper-textarea {
+  width: 100%;
+  min-height: 80px;
+  background: rgba(0, 0, 0, 0.4);
+  color: #ef4444;
+  border: 1px solid #ef4444;
+  border-radius: 8px;
+  padding: 8px;
+  font-family: inherit;
+  font-size: 0.95rem;
+  outline: none;
+}
+
+.clue-tamper-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.btn-tamper-save {
+  background: #ef4444;
+  color: #fff;
+  border: none;
+  padding: 4px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.btn-tamper-cancel {
+  background: transparent;
+  color: #94a3b8;
+  border: 1px solid #94a3b8;
+  padding: 4px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.clue-description {
+  margin: 0;
+  color: #cbd5e1;
+  font-size: 0.95rem;
+  line-height: 1.5;
+}
+
+.clue-description.tampered {
+  text-decoration: line-through;
+  opacity: 0.5;
+}
+
+.clue-fake-description {
+  margin: 8px 0 0 0;
+  color: #ef4444;
+  font-size: 0.95rem;
+  line-height: 1.5;
+  font-style: italic;
+}
+
+.clue-footer {
+  margin-top: 12px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.clue-source {
+  font-size: 0.75rem;
+  color: #64748b;
+}
+
+.btn-tamper-trigger {
+  background: rgba(239, 68, 68, 0.2);
+  color: #ef4444;
+  border: 1px solid rgba(239, 68, 68, 0.5);
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.ai-tab-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.ai-chat-log {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 8px;
+}
+
+.ai-chat-empty {
+  text-align: center;
+  color: #94a3b8;
+  margin: auto;
+}
+
+.ai-chat-empty-text {
+  font-size: 0.85rem;
+}
+
+.ai-chat-message {
+  padding: 10px 14px;
+  border-radius: 12px;
+  max-width: 85%;
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.5;
+  color: #fff;
+}
+
+.ai-chat-message.user {
+  align-self: flex-end;
+  background: #0ea5e9;
+  border: none;
+}
+
+.ai-chat-message.ai {
+  align-self: flex-start;
+  background: rgba(30, 41, 59, 0.8);
+  border: 1px solid rgba(56, 189, 248, 0.3);
+}
+
+.ai-chat-input-container {
+  margin-top: 16px;
+  display: flex;
+  gap: 8px;
+}
+
+.ai-chat-input {
+  flex: 1;
+  padding: 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(0, 0, 0, 0.3);
+  color: #fff;
+  outline: none;
+}
+
+.ai-chat-submit {
+  padding: 0 20px;
+  border-radius: 8px;
+  font-weight: bold;
+  border: none;
+  color: #0f172a;
+}
+
+.ai-chat-submit.ready {
+  background: #38bdf8;
+  cursor: pointer;
+}
+
+.ai-chat-submit.disabled {
+  background: #64748b;
+  cursor: not-allowed;
+}
+
+.ai-chat-thinking {
+  opacity: 0.5;
+}

@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using CaseRoom.Api.Content;
 using CaseRoom.Api.Models;
 
 
@@ -35,38 +36,6 @@ public sealed class GameStateStore
     private readonly ConcurrentDictionary<string, string> _voiceConnectionsByPlayerId = new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<string, string> _playerIdByVoiceConnection = new();
     private readonly ConcurrentDictionary<string, (string SessionId, string RoomId)> _voiceRoomByConnection = new();
-    
-    // Danh sách các vụ án có sẵn (Hardcode tạm thời cho V1.5)
-    private static readonly IReadOnlyList<CaseSummaryDto> AvailableCases =
-    [
-    new(
-        "blackwood_manor",
-        "Blackwood Manor",
-        "A classic mansion murder mystery. The victim was found in a locked room during a stormy night.",
-        "Easy",
-        25,
-        "Welcome to Blackwood Manor. Last night, during a violent storm, the owner of the manor was found dead inside a locked study. Search the rooms, question the witnesses, and uncover who is lying.",
-        ["NpcMurderer", "PlayerMurderer"]
-    ),
-    new(
-        "midnight_train",
-        "The Midnight Train",
-        "A passenger disappears during a midnight train ride, leaving behind only a torn ticket and a blood-stained glove.",
-        "Medium",
-        30,
-        "The Midnight Train left the city at 11:40 PM. Before it reached the next station, one passenger vanished. Find out what happened before the train arrives.",
-        ["NpcMurderer"]
-    ),
-    new(
-        "gallery_after_dark",
-        "Gallery After Dark",
-        "A private art exhibition turns deadly after the lights go out and a priceless painting disappears.",
-        "Medium",
-        30,
-        "Tonight's private exhibition was supposed to reveal a lost masterpiece. But when the lights went out, the painting vanished, and the curator was found unconscious.",
-        ["NpcMurderer", "EveryoneHasSecrets"]
-    )
-    ];
     #endregion
 
     #region Core & Sessions
@@ -80,13 +49,16 @@ public sealed class GameStateStore
 
         return _sessions.GetOrAdd(sessionId, id =>
         {
-        var session = new GameSessionState { Id = id };
-        var defaultCase = AvailableCases.First();
-        session.SelectedCase = defaultCase;
-        session.SelectedCaseId = defaultCase.Id;
-        session.BriefingText = defaultCase.BriefingText;
-        return session;
-    });
+            var session = new GameSessionState { Id = id };
+            var defaultCase = GameContentCatalog.AvailableCases.First();
+            session.SelectedCase = defaultCase;
+            session.SelectedCaseId = defaultCase.Id;
+            session.BriefingText = defaultCase.BriefingText;
+
+            GameContentCatalog.SeedDefaultClues(session);
+
+            return session;
+        });
     }
 
     private static string NormalizeSessionId(string sessionId)
@@ -102,25 +74,25 @@ public sealed class GameStateStore
     /// Thêm người chơi mới hoặc cập nhật người chơi cũ khi họ bị mất kết nối và join lại.
     /// Sử dụng lock(session) để đảm bảo không bị lỗi Race Condition khi nhiều người join cùng lúc.
     /// </summary>
-    public PlayerState AddOrUpdatePlayer(string sessionId, string playerName, string connectionId)
+    public PlayerState AddOrUpdatePlayer(string sessionId, string playerId, string playerName, string connectionId)
     {
         var session = GetOrCreateSession(sessionId);
         lock (session)
         {
-            var existing = session.Players.Values.FirstOrDefault(p =>
-                string.Equals(p.Name, playerName, StringComparison.OrdinalIgnoreCase));
-            if (existing is not null)
+            if (!string.IsNullOrEmpty(playerId) && session.Players.TryGetValue(playerId, out var existing))
             {
                 existing.ConnectionId = connectionId;
+                existing.Name = string.IsNullOrWhiteSpace(playerName) ? existing.Name : playerName.Trim();
                 _gameConnections[connectionId] = (session.Id, existing.Id);
 
                 session.HostPlayerId ??= existing.Id;
 
                 return existing;
             }
+
             var player = new PlayerState
             {
-                Id = Guid.NewGuid().ToString("N"),
+                Id = string.IsNullOrWhiteSpace(playerId) ? Guid.NewGuid().ToString("N") : playerId,
                 Name = string.IsNullOrWhiteSpace(playerName) ? "Detective" : playerName.Trim(),
                 ConnectionId = connectionId,
                 CurrentRoomId = "briefing" // Phòng mặc định khi mới vào
@@ -181,7 +153,7 @@ public sealed class GameStateStore
 
             session.SelectedMode = parsedMode;
 
-            var compatibleCases = AvailableCases
+            var compatibleCases = GameContentCatalog.AvailableCases
                 .Where(c => c.SupportedModes.Contains(parsedMode.ToString()))
                 .ToList();
 
@@ -191,8 +163,16 @@ public sealed class GameStateStore
                 return false;
             }
 
-            if (session.SelectedCase is null ||
-                !session.SelectedCase.SupportedModes.Contains(parsedMode.ToString()))
+            session.SelectedMode = parsedMode;
+
+            // Đổi Mode -> Reset Sẵn sàng của tất cả mọi người
+            foreach (var p in session.Players.Values)
+            {
+                p.IsReady = false;
+            }
+
+            // Fallback tự động chọn case tương thích nếu case hiện tại không còn hợp lệ
+            if (session.SelectedCase != null && !session.SelectedCase.SupportedModes.Contains(parsedMode.ToString()))
             {
                 session.SelectedCase = compatibleCases[0];
                 session.SelectedCaseId = compatibleCases[0].Id;
@@ -208,7 +188,29 @@ public sealed class GameStateStore
             return true;
         }
     }
-        public bool TryStartBriefing(
+
+    public bool TrySetAppearance(
+        string sessionId,
+        string playerId,
+        CharacterAppearance appearance,
+        out string? error)
+    {
+        error = null;
+        var session = GetOrCreateSession(sessionId);
+
+        lock (session)
+        {
+            if (!session.Players.TryGetValue(playerId, out var player))
+            {
+                error = "Player not found in session.";
+                return false;
+            }
+            player.Appearance = appearance;
+            return true;
+        }
+    }
+
+    public bool TryStartBriefing(
         string sessionId,
         string playerId,
         out IReadOnlyList<PlayerRoomMove> movedPlayers,
@@ -231,18 +233,30 @@ public sealed class GameStateStore
 
             if (session.Phase is not GamePhase.Lobby)
             {
-                error = $"Cannot start briefing from phase {session.Phase}.";
+                error = "Chỉ có thể bắt đầu Briefing từ Lobby.";
+                return false;
+            }
+
+            if (session.SelectedCase == null)
+            {
+                error = "Vui lòng chọn Vụ án trước.";
+                return false;
+            }
+
+            if (session.Players.Count < 4)
+            {
+                error = "Cần ít nhất 4 người chơi để bắt đầu vụ án.";
+                return false;
+            }
+
+            if (session.Players.Values.Any(p => !p.IsReady))
+            {
+                error = "Tất cả người chơi phải bấm Sẵn sàng.";
                 return false;
             }
 
             session.Phase = GamePhase.Briefing;
             
-            if (session.SelectedCase is null)
-            {
-                error = "Please select a case before starting briefing.";
-                return false;
-            }
-
             var moves = new List<PlayerRoomMove>();
 
             foreach (var player in session.Players.Values)
@@ -298,6 +312,23 @@ public sealed class GameStateStore
 
             session.Phase = GamePhase.Exploration;
 
+            // Nếu Mode là PlayerMurderer hoặc EveryoneHasSecrets, gán Random 1 người làm Murderer
+            if (session.SelectedMode == GameMode.PlayerMurderer || session.SelectedMode == GameMode.EveryoneHasSecrets)
+            {
+                var random = new Random();
+                var playersList = session.Players.Values.ToList();
+                if (playersList.Count > 0)
+                {
+                    var murderer = playersList[random.Next(playersList.Count)];
+                    murderer.Role = "Murderer";
+                    // Những người khác vẫn là Detective
+                    foreach(var p in playersList.Where(x => x.Id != murderer.Id))
+                    {
+                        p.Role = "Detective";
+                    }
+                }
+            }
+
             phaseInfo = new GamePhaseInfo(
                 session.Phase.ToString(),
                 session.HostPlayerId,
@@ -336,7 +367,7 @@ public sealed class GameStateStore
                 return false;
             }
 
-            var nextCase = AvailableCases.FirstOrDefault(c =>
+            var nextCase = GameContentCatalog.AvailableCases.FirstOrDefault(c =>
                 string.Equals(c.Id, caseId, StringComparison.OrdinalIgnoreCase));
 
             if (nextCase is null)
@@ -354,6 +385,12 @@ public sealed class GameStateStore
             session.SelectedCaseId = nextCase.Id;
             session.SelectedCase = nextCase;
             session.BriefingText = nextCase.BriefingText;
+
+            // Đổi Case -> Reset Sẵn sàng của tất cả mọi người
+            foreach (var p in session.Players.Values)
+            {
+                p.IsReady = false;
+            }
 
             setupInfo = new GameSetupInfo(
                 session.SelectedMode.ToString(),
@@ -402,7 +439,7 @@ public sealed class GameStateStore
 
     public IReadOnlyList<CaseSummaryDto> GetAvailableCases()
     {
-        return AvailableCases;
+        return GameContentCatalog.AvailableCases;
     }
 
     /// <summary>
@@ -495,6 +532,100 @@ public sealed class GameStateStore
         }
     }
 
+    public bool TryCompleteInspection(string sessionId, string playerId, string objectId, out string? resultMessage, out ClueDto? unlockedClue, out string? error)
+    {
+        error = null;
+        resultMessage = null;
+        unlockedClue = null;
+
+        var session = GetOrCreateSession(sessionId);
+        lock (session)
+        {
+            if (!session.Players.TryGetValue(playerId, out var player))
+            {
+                error = "Player not found.";
+                return false;
+            }
+
+            if (session.Phase is not GamePhase.Exploration)
+            {
+                error = "You can only inspect objects during Exploration phase.";
+                return false;
+            }
+
+            if (player.CurrentObjectId != objectId)
+            {
+                error = "You must be at the object to inspect it.";
+                return false;
+            }
+
+            // Lấy manh mối nếu còn (Exclusive Clue)
+            if (session.AvailableClues.TryGetValue(objectId, out var clues) && clues.Count > 0)
+            {
+                unlockedClue = clues[0];
+                clues.RemoveAt(0); // Pop clue (người khác không lấy được nữa)
+                player.UnlockedClues.Add(unlockedClue);
+                resultMessage = "Bạn đã tìm thấy một manh mối mới!";
+            }
+            else
+            {
+                resultMessage = "Bạn không tìm thấy điều gì khả nghi ở đây (Hoặc ai đó đã lấy đi manh mối rồi).";
+            }
+
+            return true;
+        }
+    }
+
+    public bool TryTamperClue(string sessionId, string playerId, string clueId, string fakeText, out string? error)
+    {
+        error = null;
+        var session = GetOrCreateSession(sessionId);
+        lock (session)
+        {
+            if (!session.Players.TryGetValue(playerId, out var player))
+            {
+                error = "Player not found.";
+                return false;
+            }
+
+            if (player.Role != "Murderer")
+            {
+                error = "Only the Murderer can tamper with clues.";
+                return false;
+            }
+
+            var clueIndex = player.UnlockedClues.FindIndex(c => c.Id == clueId);
+            if (clueIndex == -1)
+            {
+                error = "You do not own this clue.";
+                return false;
+            }
+
+            var clue = player.UnlockedClues[clueIndex];
+            
+            if (!clue.IsTamperable)
+            {
+                error = "This clue cannot be tampered with.";
+                return false;
+            }
+
+            if (clue.TamperCount >= clue.MaxTamperLimit)
+            {
+                error = "You have reached the maximum tamper limit for this clue.";
+                return false;
+            }
+
+            // Update clue
+            player.UnlockedClues[clueIndex] = clue with 
+            { 
+                FakeDescription = fakeText, 
+                TamperCount = clue.TamperCount + 1 
+            };
+
+            return true;
+        }
+    }
+
     public bool TryGetPlayer(string sessionId, string playerId, out PlayerState? player)
     {
         player = null;
@@ -582,6 +713,33 @@ public sealed class GameStateStore
         return (tuple.SessionId, tuple.PlayerId, roomId, hostChanged);
     }
     #endregion
+
+    public bool TryToggleReady(string sessionId, string playerId, out bool isReady, out string? error)
+    {
+        isReady = false;
+        error = null;
+
+        var session = GetOrCreateSession(sessionId);
+
+        lock (session)
+        {
+            if (session.Phase is not GamePhase.Lobby)
+            {
+                error = "Chỉ có thể đổi trạng thái sẵn sàng ở Lobby.";
+                return false;
+            }
+
+            if (!session.Players.TryGetValue(playerId, out var player))
+            {
+                error = "Player not found.";
+                return false;
+            }
+
+            player.IsReady = !player.IsReady;
+            isReady = player.IsReady;
+            return true;
+        }
+    }
 
     #region Voice Connections (O(1) ConcurrentLookups)
     // Các thao tác này không cần lock session vì chỉ cập nhật các ConcurrentDictionary toàn cục.
